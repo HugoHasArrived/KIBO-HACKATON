@@ -1,966 +1,174 @@
-```python
 import os
-from flask import Flask, jsonify, render_template_string
+import math
+import json
+import time
+import secrets
+from flask import Flask, jsonify, render_template_string, request, session
 
 app = Flask(__name__)
+app.secret_key = os.environ.get("SECRET_KEY", "kibo-mission-trainer-local-dev-key-change-me")
+app.config.update(SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Lax")
 
-PAGE = r"""
-<!DOCTYPE html>
+# KIBO Junior Astronaut Mission Trainer
+# An independent educational simulation. It is not an official agency product.
+PAGE = r"""<!doctype html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Kibo | Junior Astronaut Mission Trainer</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#070b18">
+<title>KIBO | Junior Astronaut Mission Trainer</title>
 <style>
-:root {
-  --bg:#060914;
-  --panel:#10182a;
-  --panel2:#151f34;
-  --line:#283956;
-  --text:#edf5ff;
-  --muted:#9baecc;
-  --cyan:#53e7ff;
-  --green:#73f5b0;
-  --orange:#ffbd69;
-  --red:#ff647c;
-}
-*{box-sizing:border-box}
-body{
-  margin:0;background:radial-gradient(ellipse at 50% 0%,#14274a 0%,#080e1d 46%,#04060d 100%);
-  color:var(--text);font-family:Inter,Segoe UI,Arial,sans-serif;min-height:100vh;
-}
-button{font:inherit;cursor:pointer}
-button:focus-visible{outline:2px solid white;outline-offset:3px}
-.topbar{
-  display:flex;align-items:center;justify-content:space-between;gap:15px;
-  padding:15px 22px;border-bottom:1px solid #283956;background:#080d18eF;
-  position:sticky;top:0;z-index:10;backdrop-filter:blur(12px)
-}
-.brand{display:flex;align-items:center;gap:12px}
-.logo{
-  width:43px;height:43px;border-radius:12px;background:linear-gradient(135deg,#43dfff,#647bff);
-  display:grid;place-items:center;color:#061020;font-size:24px;font-weight:900;
-  box-shadow:0 0 24px #45dfff44
-}
-.brand h1{font-size:17px;letter-spacing:2px;margin:0}
-.brand p{font-size:11px;color:var(--muted);margin:4px 0 0}
-.top-status{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-.pill{border:1px solid var(--line);border-radius:30px;padding:7px 11px;font-size:11px;color:#c6d6ef}
-.dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--green);margin-right:6px}
-main{max-width:1500px;margin:auto;padding:18px}
-.layout{display:grid;grid-template-columns:minmax(0,1fr) 310px;gap:16px}
-.left,.right{min-width:0}
-.panel{background:linear-gradient(145deg,#111a2c,#0b1120);border:1px solid var(--line);border-radius:15px;overflow:hidden}
-.panel-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:13px 15px;border-bottom:1px solid #24324b}
-.panel-head h2{font-size:12px;letter-spacing:1.6px;margin:0}
-.eyebrow{font-size:10px;letter-spacing:1.4px;color:var(--cyan);text-transform:uppercase}
-.small{font-size:11px;color:var(--muted)}
-.stage{position:relative;background:#030713;min-height:340px}
-canvas{display:block;width:100%;height:auto;aspect-ratio:16/9;max-height:620px;touch-action:none}
-.hud{position:absolute;inset:12px;display:flex;justify-content:space-between;align-items:flex-start;pointer-events:none}
-.hud-group{display:grid;gap:7px}
-.hud-chip{background:#080e1bdc;border:1px solid #30415f;border-radius:7px;padding:7px 9px;font-size:10px;letter-spacing:.6px;backdrop-filter:blur(6px)}
-.hud-chip strong{color:var(--cyan);font-size:12px}
-.stage-bottom{position:absolute;left:12px;right:12px;bottom:12px;display:flex;justify-content:space-between;align-items:end;gap:8px;pointer-events:none}
-.message{max-width:75%;background:#080e1be8;border:1px solid #344663;padding:9px 11px;border-radius:8px;font-size:11px;color:#d8e8ff}
-.crosshair{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);color:#9aefff;font-size:23px;opacity:.5;pointer-events:none}
-.actions{display:flex;gap:7px;flex-wrap:wrap}
-.btn{
-  border:1px solid #354967;background:#19263c;color:#e9f4ff;padding:9px 12px;border-radius:8px;
-  font-size:11px;font-weight:700;transition:.15s
-}
-.btn:hover{background:#243754;border-color:#6b91bd}
-.btn.primary{background:linear-gradient(135deg,#4be1ff,#73b9ff);color:#061020;border:0}
-.btn.danger{color:#ff9baa;border-color:#73394a}
-.btn:disabled{opacity:.35;cursor:not-allowed}
-.toolbar{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 13px;border-top:1px solid var(--line);flex-wrap:wrap}
-.metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:12px}
-.metric{padding:13px;border:1px solid var(--line);border-radius:12px;background:#10182a}
-.metric label{font-size:10px;color:var(--muted);letter-spacing:1px}
-.metric strong{display:block;font-size:22px;margin:8px 0 9px;font-variant-numeric:tabular-nums}
-.unit{font-size:10px;color:var(--muted);font-weight:500}
-.track{height:5px;background:#27334a;border-radius:5px;overflow:hidden}
-.fill{height:100%;width:100%;background:var(--cyan);transition:width .2s}
-.fill.green{background:var(--green)}.fill.orange{background:var(--orange)}.fill.red{background:var(--red)}
-.right{display:grid;align-content:start;gap:12px}
-.pad{padding:14px}
-.progress-head{display:flex;justify-content:space-between;gap:10px;font-size:11px;margin-bottom:10px}
-.progress{height:6px;background:#27334a;border-radius:5px;overflow:hidden;margin-bottom:14px}
-.progress div{height:100%;width:0;background:linear-gradient(90deg,#4ae4ff,#8a9dff);transition:width .2s}
-.objectives{display:grid;gap:9px}
-.objective{display:flex;gap:10px;align-items:flex-start;border:1px solid #263650;background:#10192b;padding:10px;border-radius:9px}
-.obj-check{width:20px;height:20px;border:1px solid #415574;border-radius:6px;display:grid;place-items:center;flex-shrink:0;font-size:12px}
-.objective.done{opacity:.65}.objective.done .obj-check{background:#164c3d;border-color:#42bd8f;color:#8bffca}
-.obj-title{font-size:11px;font-weight:700;line-height:1.4}
-.obj-desc{font-size:10px;color:var(--muted);line-height:1.5;margin-top:4px}
-.statusline{display:flex;justify-content:space-between;gap:10px;font-size:11px;padding:8px 0;border-bottom:1px solid #22304a}
-.statusline:last-child{border-bottom:0}
-.statusline span{color:var(--muted)}
-.value{color:#eaf5ff;font-weight:700;text-align:right}
-.console{font-family:Consolas,monospace;font-size:10px;line-height:1.7;color:#a8c4e8;background:#050a14;border:1px solid #202e45;border-radius:8px;padding:10px;min-height:90px;max-height:145px;overflow:auto}
-.console p{margin:0 0 3px}
-.console .good{color:#7af4bd}.console .warn{color:#ffcc7c}.console .bad{color:#ff8fa1}
-.controls-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px}
-.control-card{background:#111b2d;border:1px solid #2a3b56;border-radius:9px;padding:9px}
-.control-card strong{font-size:11px;display:block}
-.control-card span{font-size:10px;color:var(--muted);line-height:1.5}
-.key{display:inline-grid;place-items:center;min-width:23px;height:22px;padding:0 5px;border:1px solid #435a7b;border-radius:5px;background:#1c2b43;color:#eaf5ff;font-size:10px;margin-right:4px}
-.mobile-controls{display:none;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}
-.mobile-controls button{min-height:47px;font-weight:800;font-size:15px;touch-action:none;user-select:none}
-.footer{text-align:center;color:#7587a5;font-size:10px;padding:22px 0 10px;line-height:1.7}
-.overlay{
-  position:absolute;inset:0;z-index:5;display:flex;align-items:center;justify-content:center;
-  padding:18px;background:#020612d9;backdrop-filter:blur(6px)
-}
-.overlay-card{width:min(470px,100%);padding:27px;border:1px solid #405778;border-radius:17px;
-  background:linear-gradient(150deg,#15233a,#080d1a);box-shadow:0 20px 80px #0009;text-align:center}
-.overlay-card .symbol{font-size:42px;margin-bottom:9px}
-.overlay-card h2{font-size:25px;letter-spacing:2px;margin:0 0 10px}
-.overlay-card p{font-size:12px;line-height:1.7;color:#aebfda}
-.overlay-card .btn{margin-top:7px}
-.countdown{font-size:52px;color:var(--cyan);font-weight:900;margin:15px}
-.select{background:#10192b;border:1px solid #334965;color:#eaf5ff;padding:9px;border-radius:8px}
-.notice{font-size:10px;color:var(--muted);line-height:1.6;margin-top:10px}
-.hidden{display:none!important}
-@media(max-width:1000px){.layout{grid-template-columns:minmax(0,1fr)}.right{grid-template-columns:repeat(2,minmax(0,1fr))}.right .wide{grid-column:1/-1}}
-@media(max-width:620px){
-  main{padding:10px}.topbar{padding:11px 12px}.brand h1{font-size:14px}.brand p{font-size:10px}
-  .top-status .pill:nth-child(2){display:none}.metrics{grid-template-columns:repeat(2,minmax(0,1fr))}
-  .right{grid-template-columns:1fr}.right .wide{grid-column:auto}
-  .stage{min-height:220px}.hud{inset:7px}.hud-chip{padding:5px 6px;font-size:9px}
-  .hud-chip strong{font-size:10px}.message{font-size:10px;max-width:90%}
-  .mobile-controls{display:grid}.panel-head{padding:11px}.metric{padding:11px}.metric strong{font-size:20px}
-}
+:root{color-scheme:dark;--bg:#060914;--panel:#10182b;--panel2:#0b1222;--line:#263650;--text:#edf5ff;--muted:#93a7c5;--cyan:#60e7ff;--blue:#6c8dff;--green:#70f0bd;--amber:#ffd479;--red:#ff6f83;--violet:#b39aff;--radius:16px;--shadow:0 20px 55px #0007}
+*{box-sizing:border-box}html,body{margin:0;min-height:100%;background:var(--bg);color:var(--text);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}body{overflow-x:hidden}button,input{font:inherit}button{cursor:pointer;color:var(--text);border:1px solid #344762;background:#17243a;border-radius:10px;padding:10px 13px;transition:transform .12s,border-color .12s,background .12s}button:hover{border-color:var(--cyan);background:#20334e}button:active{transform:translateY(1px)}button:focus-visible{outline:2px solid var(--cyan);outline-offset:3px}.primary{background:linear-gradient(135deg,#48cce9,#657aff);border:0;color:#06101c;font-weight:900}.danger{border-color:#744252;background:#351d2b}.subtle{background:#0b1425}.eyebrow{font-size:.7rem;font-weight:900;letter-spacing:.2em;color:var(--cyan);text-transform:uppercase}.muted{color:var(--muted)}.small{font-size:.78rem}.mono{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-variant-numeric:tabular-nums}.app-shell{max-width:1600px;margin:auto;padding:18px}.topbar{display:flex;align-items:center;justify-content:space-between;gap:18px;margin-bottom:16px}.brand{display:flex;align-items:center;gap:12px}.brand-mark{width:44px;height:44px;border-radius:13px;background:linear-gradient(145deg,#7af0ff,#7b87ff);display:grid;place-items:center;color:#07101e;font-size:1.4rem;font-weight:1000;box-shadow:0 0 35px #5be6ff2b}.brand h1{font-size:1.05rem;letter-spacing:.1em;margin:0}.brand p{margin:4px 0 0;color:var(--muted);font-size:.75rem}.top-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.pill{border:1px solid var(--line);border-radius:999px;padding:7px 10px;color:var(--muted);font-size:.72rem;display:flex;align-items:center;gap:7px}.dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 12px var(--green)}.layout{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:16px;align-items:start}.main-column{min-width:0}.panel{background:linear-gradient(160deg,#111a2d,#0b1120);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden}.panel-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 16px;border-bottom:1px solid #24334a}.panel-head h2{margin:0;font-size:.78rem;letter-spacing:.13em;text-transform:uppercase}.panel-head span{color:var(--muted);font-size:.7rem}.viewport{position:relative;min-height:480px;aspect-ratio:16/9;background:#040815;overflow:hidden}.viewport canvas{position:absolute;inset:0;width:100%;height:100%;display:block}.canvas-overlay{position:absolute;inset:0;pointer-events:none;display:flex;flex-direction:column;justify-content:space-between;padding:15px}.hud-row{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}.hud-chip{background:#07101dcc;border:1px solid #3b536e;border-radius:9px;padding:8px 10px;backdrop-filter:blur(8px);font-size:.72rem;color:#dbeeff}.hud-chip strong{display:block;font-size:.83rem;color:var(--cyan);margin-top:3px}.crosshair{position:absolute;left:50%;top:50%;width:28px;height:28px;transform:translate(-50%,-50%);opacity:.7}.crosshair:before,.crosshair:after{content:"";position:absolute;background:#8df2ff}.crosshair:before{left:13px;top:0;width:1px;height:28px}.crosshair:after{top:13px;left:0;height:1px;width:28px}.scan-reticle{position:absolute;width:150px;height:150px;left:50%;top:50%;transform:translate(-50%,-50%);border:1px solid #65eaff66;border-radius:50%;display:none}.scan-reticle:before,.scan-reticle:after{content:"";position:absolute;inset:13px;border:1px dashed #65eaff55;border-radius:50%}.scan-reticle:after{inset:34px}.viewport.scanning .scan-reticle{display:block;animation:rotate 8s linear infinite}.viewport.scanning .crosshair{opacity:0}@keyframes rotate{to{transform:translate(-50%,-50%) rotate(360deg)}}.status-strip{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);border-top:1px solid var(--line)}.status-cell{background:#0c1424;padding:12px 14px;min-width:0}.status-label{font-size:.65rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase}.status-value{display:flex;justify-content:space-between;gap:8px;align-items:baseline;margin:5px 0 8px;font-size:.98rem;font-weight:800}.bar{height:5px;background:#25354b;border-radius:10px;overflow:hidden}.bar span{display:block;height:100%;border-radius:10px;background:linear-gradient(90deg,#4dcde8,#8b9aff);width:100%;transition:width .25s}.bar.green span{background:linear-gradient(90deg,#47d6a4,#a4ffd8)}.bar.amber span{background:linear-gradient(90deg,#f7a95e,#ffe28c)}.bar.red span{background:linear-gradient(90deg,#ff667c,#ffad98)}.below-grid{display:grid;grid-template-columns:1.15fr .85fr;gap:16px;margin-top:16px}.controls-body{padding:15px}.control-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;max-width:340px;margin:8px auto 13px}.control-grid button{min-height:46px;font-weight:800}.control-grid .blank{visibility:hidden}.control-caption{text-align:center;color:var(--muted);font-size:.72rem;margin-bottom:12px}.action-row{display:flex;gap:8px;flex-wrap:wrap}.action-row button{flex:1;min-width:100px}.key{font-family:ui-monospace,monospace;background:#050a14;border:1px solid #34445d;border-radius:5px;padding:2px 5px;font-size:.72rem}.objective-list{padding:8px 14px 13px}.objective{display:grid;grid-template-columns:24px minmax(0,1fr) auto;gap:10px;align-items:start;padding:11px 0;border-bottom:1px solid #1d2b40}.objective:last-child{border-bottom:0}.objective-mark{width:22px;height:22px;border:1px solid #40536b;border-radius:7px;display:grid;place-items:center;color:var(--muted);font-size:.75rem}.objective.done .objective-mark{background:#1a4b40;border-color:#3b9c7d;color:#a5ffdf}.objective.active .objective-mark{border-color:var(--cyan);color:var(--cyan);box-shadow:0 0 16px #60e7ff18}.objective-title{font-size:.81rem;font-weight:750}.objective-desc{font-size:.7rem;color:var(--muted);line-height:1.5;margin-top:4px}.objective-state{font-size:.61rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);white-space:nowrap}.objective.active .objective-state{color:var(--cyan)}.objective.done .objective-state{color:var(--green)}.side-stack{display:grid;gap:16px}.side-panel{padding:14px}.side-title{font-size:.72rem;text-transform:uppercase;letter-spacing:.13em;margin:0 0 12px}.telemetry-list{display:grid;gap:10px}.telemetry-row{display:flex;justify-content:space-between;gap:10px;font-size:.76rem}.telemetry-row span:first-child{color:var(--muted)}.telemetry-row strong{font-weight:800}.mini-map{height:180px;border:1px solid #273952;border-radius:12px;overflow:hidden;background:#050b17;position:relative}.mini-map canvas{width:100%;height:100%;display:block}.map-legend{display:flex;justify-content:space-between;gap:8px;color:var(--muted);font-size:.67rem;margin-top:8px}.legend-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--cyan);margin-right:5px}.legend-dot.gold{background:var(--amber)}.log{max-height:190px;overflow:auto;display:grid;gap:8px}.log-entry{font-size:.72rem;line-height:1.45;border-left:2px solid #40526b;padding:2px 0 2px 9px;color:#c4d2e8}.log-entry.good{border-color:var(--green)}.log-entry.warn{border-color:var(--amber)}.log-entry time{display:block;color:#7488a6;font-size:.63rem;margin-bottom:2px}.footer-note{text-align:center;color:#657793;font-size:.68rem;padding:20px 8px 5px}.modal-backdrop{position:fixed;inset:0;background:#02040bdc;backdrop-filter:blur(9px);z-index:20;display:none;align-items:center;justify-content:center;padding:18px}.modal-backdrop.show{display:flex}.modal{width:min(720px,100%);max-height:90vh;overflow:auto;border:1px solid #3a526f;border-radius:22px;background:linear-gradient(145deg,#121e34,#070c18);box-shadow:0 30px 100px #000c;padding:clamp(20px,4vw,38px)}.modal h2{font-size:clamp(1.8rem,4vw,3.3rem);line-height:1.03;letter-spacing:-.04em;margin:10px 0 13px}.modal p{color:#a7bad6;line-height:1.7}.modal-actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:22px}.modal-actions button{min-width:125px}.modal-kicker{font-size:.7rem;letter-spacing:.22em;color:var(--cyan);font-weight:900}.mission-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin:18px 0}.stat-card{border:1px solid #2b3d57;background:#0a1323;border-radius:12px;padding:13px}.stat-card span{display:block;color:var(--muted);font-size:.7rem}.stat-card strong{display:block;margin-top:7px;font-size:1.15rem}.toast{position:fixed;left:50%;bottom:22px;transform:translate(-50%,20px);opacity:0;pointer-events:none;z-index:30;background:#14253b;border:1px solid #4a6684;border-radius:12px;padding:12px 16px;max-width:min(92vw,520px);font-size:.82rem;box-shadow:var(--shadow);transition:.2s}.toast.show{opacity:1;transform:translate(-50%,0)}.launch-count{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-size:clamp(4rem,15vw,9rem);font-weight:1000;color:#f0fbff;text-shadow:0 0 45px #58eaffaa;z-index:3;display:none}.launch-count.show{display:block}.mobile-hint{display:none}.disabled{opacity:.45;pointer-events:none}.hidden{display:none!important}
+@media(max-width:1050px){.layout{grid-template-columns:minmax(0,1fr) 285px}.below-grid{grid-template-columns:1fr}.viewport{min-height:390px}}
+@media(max-width:760px){.app-shell{padding:10px}.topbar{align-items:flex-start}.brand h1{font-size:.9rem}.brand p{font-size:.67rem}.brand-mark{width:38px;height:38px}.top-actions .pill{display:none}.layout{grid-template-columns:1fr}.side-stack{grid-template-columns:1fr 1fr}.side-stack .panel:last-child{grid-column:1/-1}.viewport{min-height:300px;aspect-ratio:4/3}.status-strip{grid-template-columns:repeat(2,1fr)}.status-cell{padding:10px}.below-grid{gap:10px;margin-top:10px}.side-stack{gap:10px}.panel-head{padding:11px 12px}.hud-chip{font-size:.64rem;padding:7px}.mobile-hint{display:block;color:var(--muted);font-size:.69rem;margin-top:9px}.mission-stats{grid-template-columns:1fr 1fr}.mission-stats .stat-card:last-child{grid-column:1/-1}}
+@media(max-width:430px){.topbar{gap:8px}.top-actions{gap:5px}.top-actions button{font-size:.72rem;padding:8px}.brand{gap:8px}.brand h1{font-size:.76rem;letter-spacing:.06em}.brand p{font-size:.6rem}.side-stack{grid-template-columns:1fr}.side-stack .panel:last-child{grid-column:auto}.viewport{min-height:255px}.canvas-overlay{padding:8px}.hud-chip{font-size:.58rem}.hud-chip strong{font-size:.7rem}.action-row button{min-width:85px;padding:9px 6px;font-size:.74rem}.control-grid button{min-height:42px}.modal-actions button{flex:1}}
 </style>
 </head>
 <body>
+<div class="app-shell">
 <header class="topbar">
-  <div class="brand">
-    <div class="logo">K</div>
-    <div><h1>KIBO <span style="color:var(--cyan)">MISSION TRAINER</span></h1>
-      <p>JUNIOR ASTRONAUT PROGRAM · INTERACTIVE SIMULATION</p></div>
-  </div>
-  <div class="top-status">
-    <div class="pill"><span class="dot"></span><span id="connection">SIMULATION READY</span></div>
-    <div class="pill">MISSION <strong id="missionCode">KBT-01</strong></div>
-  </div>
+  <div class="brand"><div class="brand-mark">K</div><div><h1>KIBO <span style="color:var(--cyan)">MISSION TRAINER</span></h1><p>Junior Astronaut Program · Orbital Operations</p></div></div>
+  <div class="top-actions"><div class="pill"><span class="dot"></span> SIMULATION READY</div><button class="subtle" id="helpBtn">How to play</button><button class="subtle" id="soundBtn" aria-pressed="false">Sound: Off</button><button class="danger" id="resetBtn">Restart</button></div>
 </header>
-
-<main>
 <div class="layout">
-<section class="left">
-  <div class="panel">
-    <div class="panel-head">
-      <div><div class="eyebrow">Flight deck / external view</div><h2 style="margin-top:5px">ORBITAL OPERATIONS</h2></div>
-      <div class="actions">
-        <button class="btn" id="pauseBtn" onclick="togglePause()">Ⅱ PAUSE</button>
-        <button class="btn danger" onclick="resetMission()">↻ RESET</button>
-      </div>
-    </div>
-    <div class="stage">
-      <canvas id="space" width="960" height="540" aria-label="Interactive spaceflight simulation"></canvas>
-      <div class="crosshair">+</div>
-      <div class="hud">
-        <div class="hud-group">
-          <div class="hud-chip">FLIGHT MODE<br><strong id="flightMode">PRE-LAUNCH</strong></div>
-          <div class="hud-chip">VELOCITY<br><strong id="hudSpeed">0.0 m/s</strong></div>
-        </div>
-        <div class="hud-group" style="text-align:right">
-          <div class="hud-chip">ALTITUDE<br><strong id="hudAlt">0.0 km</strong></div>
-          <div class="hud-chip">TARGET RANGE<br><strong id="hudRange">— km</strong></div>
-        </div>
-      </div>
-      <div class="stage-bottom">
-        <div class="message" id="missionMessage">Welcome, cadet. Complete the pre-flight checklist to begin.</div>
-        <div class="hud-chip">UTC <strong id="clock">00:00:00</strong></div>
-      </div>
-      <div class="overlay" id="overlay">
-        <div class="overlay-card" id="overlayCard">
-          <div class="symbol">🛰️</div>
-          <div class="eyebrow">Training mission 01</div>
-          <h2>KIBO: ORBITAL RESCUE</h2>
-          <p>You are the pilot of a small training spacecraft. Launch, inspect orbital modules, manage your resources, and practice a careful docking approach.</p>
-          <p><strong>Mission briefing:</strong> Your spacecraft is in a simulated environment. Learn how thrust, inertia, scanning, and docking work through guided objectives.</p>
-          <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
-            <button class="btn primary" onclick="beginCountdown()">▶ START LAUNCH SEQUENCE</button>
-            <button class="btn" onclick="quickStart()">QUICK START</button>
-          </div>
-          <p class="notice">Educational game only. This is not an official NASA, JAXA, or space-agency simulator.</p>
-        </div>
-      </div>
-    </div>
-    <div class="toolbar">
-      <div class="small">FLIGHT CONTROLS · KEYBOARD OR TOUCH</div>
-      <div class="actions">
-        <button class="btn" onclick="scanTarget()">⌖ SCAN TARGET [ENTER]</button>
-        <button class="btn" onclick="brake()">◉ COUNTER-THRUST [SPACE]</button>
-      </div>
-    </div>
+<main class="main-column">
+<section class="panel">
+  <div class="panel-head"><h2>Orbital Operations View</h2><span id="phaseLabel">MISSION CONTROL · STANDBY</span></div>
+  <div class="viewport" id="viewport">
+    <canvas id="spaceCanvas" aria-label="Interactive orbital training simulation"></canvas>
+    <div class="canvas-overlay"><div class="hud-row"><div class="hud-chip">MISSION <strong id="hudMission">KIBO-01 / ORBITAL SERVICE</strong></div><div class="hud-chip" style="text-align:right">FLIGHT TIME<strong id="hudTime" class="mono">00:00</strong></div></div><div class="hud-row"><div class="hud-chip">VELOCITY<strong id="hudVelocity" class="mono">0.0 m/s</strong></div><div class="hud-chip" style="text-align:right">RANGE TO TARGET<strong id="hudRange" class="mono">1,200 m</strong></div></div></div>
+    <div class="crosshair"></div><div class="scan-reticle"></div><div class="launch-count" id="launchCount">3</div>
   </div>
-
-  <div class="metrics">
-    <div class="metric"><label>PROPELLANT</label><strong id="fuelText">100 <span class="unit">%</span></strong><div class="track"><div class="fill green" id="fuelBar"></div></div></div>
-    <div class="metric"><label>BATTERY</label><strong id="batteryText">100 <span class="unit">%</span></strong><div class="track"><div class="fill" id="batteryBar"></div></div></div>
-    <div class="metric"><label>HULL INTEGRITY</label><strong id="hullText">100 <span class="unit">%</span></strong><div class="track"><div class="fill green" id="hullBar"></div></div></div>
-    <div class="metric"><label>MISSION SCORE</label><strong id="scoreText">0000 <span class="unit">PTS</span></strong><div class="track"><div class="fill" id="scoreBar"></div></div></div>
-  </div>
-
-  <div class="mobile-controls">
-    <button class="btn" data-control="forward">▲ THRUST</button>
-    <button class="btn" data-control="brake">● BRAKE</button>
-    <button class="btn" data-control="scan">⌖ SCAN</button>
-    <button class="btn" data-control="left">↶ ROTATE</button>
-    <button class="btn" data-control="back">▼ REVERSE</button>
-    <button class="btn" data-control="right">ROTATE ↷</button>
-    <button class="btn" data-control="strafeLeft">◀ STRAFE</button>
-    <button class="btn" data-control="strafeRight">STRAFE ▶</button>
-    <button class="btn" data-control="pause">Ⅱ PAUSE</button>
+  <div class="status-strip">
+    <div class="status-cell"><div class="status-label">Propellant</div><div class="status-value"><span id="fuelText">100%</span><span class="muted small">RCS</span></div><div class="bar"><span id="fuelBar"></span></div></div>
+    <div class="status-cell"><div class="status-label">Battery</div><div class="status-value"><span id="batteryText">100%</span><span class="muted small">PWR</span></div><div class="bar green"><span id="batteryBar"></span></div></div>
+    <div class="status-cell"><div class="status-label">Hull integrity</div><div class="status-value"><span id="hullText">100%</span><span class="muted small">SAFE</span></div><div class="bar green"><span id="hullBar"></span></div></div>
+    <div class="status-cell"><div class="status-label">Mission score</div><div class="status-value"><span id="scoreText">0000</span><span class="muted small">PTS</span></div><div class="bar amber"><span id="scoreBar" style="width:0%"></span></div></div>
   </div>
 </section>
-
-<aside class="right">
-  <div class="panel">
-    <div class="panel-head"><h2>MISSION OBJECTIVES</h2><span class="small" id="objectiveCount">0 / 7</span></div>
-    <div class="pad">
-      <div class="progress-head"><span>MISSION PROGRESS</span><strong id="progressText">0%</strong></div>
-      <div class="progress"><div id="progressBar"></div></div>
-      <div class="objectives" id="objectives"></div>
-    </div>
+<div class="below-grid">
+<section class="panel"><div class="panel-head"><h2>Flight Controls</h2><span>THRUSTER / ATTITUDE</span></div><div class="controls-body">
+  <div class="control-grid" aria-label="Direction controls">
+    <span class="blank">.</span><button data-control="forward" aria-label="Thrust forward">▲ <span class="key">W</span></button><span class="blank">.</span>
+    <button data-control="left" aria-label="Rotate left">↶ <span class="key">A</span></button><button data-control="brake" aria-label="Stabilize">◎ <span class="key">SPACE</span></button><button data-control="right" aria-label="Rotate right">↷ <span class="key">D</span></button>
+    <button data-control="strafeLeft" aria-label="Strafe left">◀ <span class="key">Q</span></button><button data-control="reverse" aria-label="Reverse thrust">▼ <span class="key">S</span></button><button data-control="strafeRight" aria-label="Strafe right">▶ <span class="key">E</span></button>
   </div>
-
-  <div class="panel">
-    <div class="panel-head"><h2>SPACECRAFT TELEMETRY</h2><span class="eyebrow">LIVE</span></div>
-    <div class="pad">
-      <div class="statusline"><span>Flight state</span><strong class="value" id="stateText">Standby</strong></div>
-      <div class="statusline"><span>Position X</span><strong class="value" id="posX">0.0</strong></div>
-      <div class="statusline"><span>Position Y</span><strong class="value" id="posY">0.0</strong></div>
-      <div class="statusline"><span>Relative speed</span><strong class="value" id="speedValue">0.0 m/s</strong></div>
-      <div class="statusline"><span>Nearest target</span><strong class="value" id="targetText">Not acquired</strong></div>
-      <div class="statusline"><span>Docking alignment</span><strong class="value" id="alignText">—</strong></div>
-    </div>
-  </div>
-
-  <div class="panel">
-    <div class="panel-head"><h2>LOCAL RADAR</h2><span class="small">RELATIVE POSITION</span></div>
-    <div class="pad"><canvas id="radar" width="280" height="180" style="aspect-ratio:14/9;border-radius:8px;border:1px solid #273b57"></canvas>
-      <div class="notice">Blue = spacecraft · Cyan = modules · Green = docking port</div>
-    </div>
-  </div>
-
-  <div class="panel">
-    <div class="panel-head"><h2>MISSION CONTROL</h2><span class="eyebrow">COMMS</span></div>
-    <div class="pad"><div class="console" id="console"><p class="good">[SYSTEM] Trainer initialized.</p><p>[FLIGHT] Awaiting pilot command.</p></div>
-      <div class="actions" style="margin-top:9px">
-        <button class="btn" onclick="requestStatus()">REQUEST STATUS</button>
-        <button class="btn" onclick="scanTarget()">RUN SCAN</button>
-      </div>
-    </div>
-  </div>
-
-  <div class="panel wide">
-    <div class="panel-head"><h2>FLIGHT CONTROL GUIDE</h2><span class="small">KEYBOARD</span></div>
-    <div class="pad">
-      <div class="controls-grid">
-        <div class="control-card"><strong><span class="key">W</span> Main thrust</strong><span>Accelerate forward in the direction you face.</span></div>
-        <div class="control-card"><strong><span class="key">S</span> Reverse thrust</strong><span>Apply thrust in the opposite direction.</span></div>
-        <div class="control-card"><strong><span class="key">A</span><span class="key">D</span> Rotate</strong><span>Turn the spacecraft left or right.</span></div>
-        <div class="control-card"><strong><span class="key">Q</span><span class="key">E</span> Strafe</strong><span>Translate sideways without turning.</span></div>
-        <div class="control-card"><strong><span class="key">SPACE</span> Brake</strong><span>Counter-thrust to reduce drift.</span></div>
-        <div class="control-card"><strong><span class="key">ENTER</span> Scan</strong><span>Inspect nearby objectives and modules.</span></div>
-      </div>
-      <p class="notice">Tip: space has inertia. Release thrust early and use short braking pulses before approaching the docking port.</p>
-    </div>
-  </div>
+  <div class="control-caption">W/S thrust · A/D rotate · Q/E strafe · Space stabilize</div>
+  <div class="action-row"><button id="scanBtn">⌕ Scan target <span class="key">ENTER</span></button><button id="interactBtn">◎ Interact <span class="key">F</span></button><button id="pauseBtn">Ⅱ Pause <span class="key">P</span></button></div>
+  <p class="mobile-hint">On mobile, tap and hold the direction buttons. Use Scan and Interact to complete each training step.</p>
+</div></section>
+<section class="panel"><div class="panel-head"><h2>Mission Checklist</h2><span id="objectiveCount">0 / 7 COMPLETE</span></div><div class="objective-list" id="objectiveList"></div></section>
+</div>
+</main>
+<aside class="side-stack">
+<section class="panel"><div class="panel-head"><h2>Flight Telemetry</h2><span>LIVE</span></div><div class="side-panel"><div class="telemetry-list">
+  <div class="telemetry-row"><span>Mission state</span><strong id="telemetryState" style="color:var(--amber)">STANDBY</strong></div>
+  <div class="telemetry-row"><span>Altitude</span><strong id="altitude" class="mono">408.0 km</strong></div>
+  <div class="telemetry-row"><span>Relative speed</span><strong id="speed" class="mono">0.0 m/s</strong></div>
+  <div class="telemetry-row"><span>Attitude</span><strong id="attitude" class="mono">000°</strong></div>
+  <div class="telemetry-row"><span>Target bearing</span><strong id="bearing" class="mono">000°</strong></div>
+  <div class="telemetry-row"><span>Signal quality</span><strong id="signal">98%</strong></div>
+  <div class="telemetry-row"><span>Systems status</span><strong id="systems" style="color:var(--green)">NOMINAL</strong></div>
+</div></div></section>
+<section class="panel"><div class="panel-head"><h2>Proximity Radar</h2><span>RELATIVE POSITIONS</span></div><div class="side-panel"><div class="mini-map"><canvas id="radarCanvas" aria-label="Relative position radar"></canvas></div><div class="map-legend"><span><i class="legend-dot"></i> KIBO craft</span><span><i class="legend-dot gold"></i> Target</span><span>Not to scale</span></div></div></section>
+<section class="panel"><div class="panel-head"><h2>Mission Control Log</h2><span id="logCount">01 EVENTS</span></div><div class="side-panel"><div class="log" id="eventLog" aria-live="polite"></div></div></section>
 </aside>
 </div>
-<div class="footer">KIBO JUNIOR ASTRONAUT MISSION TRAINER · EDUCATIONAL SPACEFLIGHT GAME<br>All positions, distances, speeds, and spacecraft systems are simplified for gameplay and are not real flight data.</div>
-</main>
-
+<div class="footer-note">Independent educational simulation · Inspired by orbital science and astronaut training · Not an official NASA, JAXA, or space-agency product.</div>
+</div>
+<div class="modal-backdrop show" id="introModal" role="dialog" aria-modal="true" aria-labelledby="introTitle"><div class="modal"><div class="modal-kicker">JUNIOR ASTRONAUT PROGRAM / MISSION 01</div><h2 id="introTitle">Your first day<br><span style="color:var(--cyan)">in orbit.</span></h2><p>Welcome, flight trainee. Your KIBO service craft is preparing for a simulated orbital operations exercise. Complete the launch checks, learn to control your motion, inspect the science module, and make a careful approach to the docking port.</p><div class="mission-stats"><div class="stat-card"><span>MISSION</span><strong>KIBO-01</strong></div><div class="stat-card"><span>DIFFICULTY</span><strong>Cadet</strong></div><div class="stat-card"><span>OBJECTIVES</span><strong>7 steps</strong></div></div><p class="small">This is a fictional learning simulator. It simplifies orbital mechanics for play and should not be used for real flight operations.</p><div class="modal-actions"><button class="primary" id="startBtn">Begin mission →</button><button id="briefingBtn">Read controls</button></div></div></div>
+<div class="modal-backdrop" id="helpModal" role="dialog" aria-modal="true" aria-labelledby="helpTitle"><div class="modal"><div class="modal-kicker">FLIGHT MANUAL / QUICK REFERENCE</div><h2 id="helpTitle">Learn your<br><span style="color:var(--cyan)">controls.</span></h2><p><b>Move:</b> hold W or ▲ to thrust. S or ▼ reverses thrust. Q/E strafe sideways. A/D rotate your craft. Space applies stabilization to reduce drift.</p><p><b>Complete objectives:</b> follow the checklist. Get close to the highlighted object, press Enter to scan it, then press F to interact when the prompt says you are in range. Docking requires low relative speed and a close, centered approach.</p><p><b>Training tip:</b> in microgravity, your craft keeps moving after you stop thrusting. Use brief pulses and stabilize early rather than waiting until you reach the target.</p><div class="modal-actions"><button class="primary" id="closeHelp">Got it</button></div></div></div>
+<div class="modal-backdrop" id="resultModal" role="dialog" aria-modal="true" aria-labelledby="resultTitle"><div class="modal"><div class="modal-kicker">MISSION REPORT / KIBO-01</div><h2 id="resultTitle">Training<br><span style="color:var(--green)">complete.</span></h2><p id="resultMessage">You have completed the orbital operations exercise.</p><div class="mission-stats"><div class="stat-card"><span>FINAL SCORE</span><strong id="finalScore">0000</strong></div><div class="stat-card"><span>FLIGHT TIME</span><strong id="finalTime">00:00</strong></div><div class="stat-card"><span>HULL INTEGRITY</span><strong id="finalHull">100%</strong></div></div><div class="modal-actions"><button class="primary" id="againBtn">Fly again</button><button id="reportBtn">Show debrief</button></div></div></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
 <script>
-"use strict";
-
-const canvas = document.getElementById("space");
-const ctx = canvas.getContext("2d");
-const radar = document.getElementById("radar");
-const rctx = radar.getContext("2d");
-
-const missions = [
-  {name:"Launch sequence",desc:"Complete launch and enter the orbital training area.",x:-380,y:160,range:120,score:100},
-  {name:"Alpha Joint",desc:"Approach the first orbital module and scan it.",x:-120,y:-90,range:85,score:150},
-  {name:"Rack 01",desc:"Inspect the equipment rack. Keep your speed under control.",x:120,y:-145,range:80,score:150},
-  {name:"Bravo Node",desc:"Reach the connection node and run a system scan.",x:310,y:35,range:85,score:200},
-  {name:"Hatch Inspection",desc:"Approach the service hatch and inspect the outer structure.",x:100,y:235,range:75,score:200},
-  {name:"Rack 02",desc:"Inspect the second equipment rack.",x:-155,y:205,range:80,score:200},
-  {name:"Docking Port",desc:"Approach the green docking port slowly and complete docking.",x:390,y:-230,range:55,score:500}
+(()=>{'use strict';
+const $=id=>document.getElementById(id);
+const canvas=$('spaceCanvas');const ctx=canvas.getContext('2d');const radar=$('radarCanvas');const rctx=radar.getContext('2d');
+const viewport=$('viewport');
+const OBJECTIVES=[
+ {title:'Complete launch sequence',desc:'Run the pre-flight checks and begin the orbital exercise.',type:'launch',x:0,y:0},
+ {title:'Calibrate attitude controls',desc:'Use the thrusters, then stabilize your rotation and drift.',type:'control',x:0,y:0},
+ {title:'Scan Alpha joint',desc:'Approach the highlighted truss joint and perform a sensor scan.',type:'scan',x:320,y:-140},
+ {title:'Inspect science rack 01',desc:'Move close to the research rack and interact with the equipment.',type:'interact',x:520,y:70},
+ {title:'Inspect the hatch assembly',desc:'Scan the hatch assembly and verify its safety indicators.',type:'scan',x:180,y:260},
+ {title:'Verify science rack 02',desc:'Reach the second equipment bay and complete its inspection.',type:'interact',x:-280,y:170},
+ {title:'Dock at the service port',desc:'Align with the port, reduce relative speed, and complete docking.',type:'dock',x:-390,y:-230}
 ];
-
-const state = {
-  mode:"PRE-LAUNCH",
-  running:false,
-  paused:false,
-  complete:false,
-  countdown:0,
-  launchTime:0,
-  elapsed:0,
-  fuel:100,
-  battery:100,
-  hull:100,
-  score:0,
-  x:-440,
-  y:290,
-  vx:0,
-  vy:0,
-  angle:-0.55,
-  altitude:0,
-  scanned:{},
-  current:0,
-  message:"Welcome, cadet. Complete the pre-flight checklist to begin.",
-  scanCooldown:0,
-  thrusting:false,
-  lastFrame:0,
-  sessionStart:Date.now()
-};
-
-const stars = [];
-let seed = 529;
-function rand(){
-  seed=(seed*16807)%2147483647;
-  return (seed-1)/2147483646;
-}
-for(let i=0;i<240;i++){
-  stars.push({x:rand()*canvas.width,y:rand()*canvas.height,r:rand()*1.5+.3,a:rand()*.65+.25,p:rand()*6});
-}
-
-function log(text,type=""){
-  const box=document.getElementById("console");
-  const p=document.createElement("p");
-  p.textContent="["+new Date().toLocaleTimeString([], {hour12:false})+"] "+text;
-  if(type)p.className=type;
-  box.appendChild(p);
-  while(box.children.length>35)box.removeChild(box.firstChild);
-  box.scrollTop=box.scrollHeight;
-}
-
-function setMessage(text){
-  state.message=text;
-  document.getElementById("missionMessage").textContent=text;
-}
-
-function beginCountdown(){
-  if(state.running)return;
-  state.countdown=10;
-  state.mode="COUNTDOWN";
-  state.paused=false;
-  document.getElementById("overlayCard").innerHTML=
-    '<div class="symbol">🚀</div><div class="eyebrow">Launch sequence initiated</div>'+
-    '<h2>ALL SYSTEMS GO</h2><p>Strap in, cadet. Watch the countdown and prepare for orbital insertion.</p>'+
-    '<div class="countdown" id="countdownNumber">10</div><p>Keep your hands clear of the controls during automated ascent.</p>'+
-    '<button class="btn danger" onclick="resetMission()">ABORT / RESET</button>';
-  log("Launch sequence initiated.","warn");
-  setMessage("Launch countdown initiated. Automated ascent will begin at T-0.");
-  tickCountdown();
-}
-
-function tickCountdown(){
-  if(state.mode!=="COUNTDOWN")return;
-  document.getElementById("countdownNumber").textContent=Math.max(0,Math.ceil(state.countdown));
-  if(state.countdown<=0){
-    startMission(true);
-    return;
-  }
-  state.countdown-=1;
-  setTimeout(tickCountdown,1000);
-}
-
-function quickStart(){
-  document.getElementById("overlay").classList.add("hidden");
-  startMission(false);
-}
-
-function startMission(automated){
-  state.running=true;
-  state.paused=false;
-  state.mode=automated?"ASCENT":"ORBIT";
-  state.launchTime=automated?performance.now():0;
-  state.elapsed=0;
-  document.getElementById("overlay").classList.add("hidden");
-  document.getElementById("pauseBtn").textContent="Ⅱ PAUSE";
-  document.getElementById("connection").textContent="FLIGHT ACTIVE";
-  log(automated?"Liftoff confirmed. Automated ascent started.":"Quick-start mode engaged. Orbital training active.","good");
-  log("Telemetry and objective tracking online.");
-  setMessage(automated?"Liftoff! Hold position while the ascent sequence completes.":"Orbital training started. Head toward the first module.");
-  if(!automated)completeObjective(0);
-  updateObjectives();
-}
-
-function resetMission(){
-  state.mode="PRE-LAUNCH";
-  state.running=false;
-  state.paused=false;
-  state.complete=false;
-  state.countdown=0;
-  state.launchTime=0;
-  state.elapsed=0;
-  state.fuel=100;
-  state.battery=100;
-  state.hull=100;
-  state.score=0;
-  state.x=-440;
-  state.y=290;
-  state.vx=0;
-  state.vy=0;
-  state.angle=-0.55;
-  state.altitude=0;
-  state.scanned={};
-  state.current=0;
-  state.scanCooldown=0;
-  state.sessionStart=Date.now();
-  document.getElementById("overlay").classList.remove("hidden");
-  document.getElementById("overlayCard").innerHTML=
-    '<div class="symbol">🛰️</div><div class="eyebrow">Training mission 01</div>'+
-    '<h2>KIBO: ORBITAL RESCUE</h2>'+
-    '<p>You are the pilot of a small training spacecraft. Launch, inspect orbital modules, manage your resources, and practice a careful docking approach.</p>'+
-    '<p><strong>Mission briefing:</strong> Your spacecraft is in a simulated environment. Learn how thrust, inertia, scanning, and docking work through guided objectives.</p>'+
-    '<div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">'+
-    '<button class="btn primary" onclick="beginCountdown()">▶ START LAUNCH SEQUENCE</button>'+
-    '<button class="btn" onclick="quickStart()">QUICK START</button></div>'+
-    '<p class="notice">Educational game only. This is not an official NASA, JAXA, or space-agency simulator.</p>';
-  document.getElementById("connection").textContent="SIMULATION READY";
-  document.getElementById("pauseBtn").textContent="Ⅱ PAUSE";
-  document.getElementById("console").innerHTML="";
-  log("Simulation reset. Awaiting pilot.","good");
-  setMessage("Welcome, cadet. Complete the pre-flight checklist to begin.");
-  updateObjectives();
-  updateUI();
-}
-
-function togglePause(){
-  if(!state.running)return;
-  state.paused=!state.paused;
-  document.getElementById("pauseBtn").textContent=state.paused?"▶ RESUME":"Ⅱ PAUSE";
-  if(state.paused){
-    state.mode="PAUSED";
-    log("Flight simulation paused.","warn");
-    setMessage("Simulation paused. Press Resume or P to continue.");
-  }else{
-    state.mode="ORBIT";
-    log("Flight simulation resumed.","good");
-    setMessage("Simulation resumed. Monitor your drift and remaining resources.");
-  }
-  if(state.complete)state.mode="COMPLETE";
-}
-
-function completeObjective(index){
-  if(state.scanned[index])return;
-  state.scanned[index]=true;
-  state.score+=missions[index].score;
-  log("Objective complete: "+missions[index].name+". +" + missions[index].score+" points.","good");
-  if(index===missions.length-1){
-    state.complete=true;
-    state.mode="COMPLETE";
-    state.running=false;
-    setMessage("Docking complete! You have completed the orbital training mission.");
-    log("MISSION SUCCESS. All training objectives completed.","good");
-    document.getElementById("connection").textContent="MISSION COMPLETE";
-  }else{
-    const next=missions.findIndex((m,i)=>i>index&&!state.scanned[i]);
-    state.current=next<0?index:next;
-    setMessage("Objective complete: "+missions[index].name+". Next: "+missions[state.current].name+".");
-  }
-  updateObjectives();
-}
-
-function distanceTo(m){
-  return Math.hypot(state.x-m.x,state.y-m.y);
-}
-
-function getNearest(){
-  let best=-1,dist=Infinity;
-  missions.forEach((m,i)=>{
-    if(!state.scanned[i]){
-      const d=distanceTo(m);
-      if(d<dist){dist=d;best=i;}
-    }
-  });
-  return {index:best,distance:dist};
-}
-
-function scanTarget(){
-  if(!state.running||state.paused||state.complete){
-    log("Scan unavailable: start or resume the mission first.","warn");
-    return;
-  }
-  if(state.scanCooldown>0){
-    log("Scanner cooling down. Please wait.","warn");
-    return;
-  }
-  if(state.battery<1){
-    log("Scanner offline: insufficient battery.","bad");
-    return;
-  }
-  state.battery=Math.max(0,state.battery-1.5);
-  state.scanCooldown=1.2;
-  const nearest=getNearest();
-  if(nearest.index<0){
-    log("All objectives already completed.","good");
-    return;
-  }
-  const m=missions[nearest.index];
-  if(nearest.distance<=m.range){
-    if(nearest.index===missions.length-1){
-      const speed=Math.hypot(state.vx,state.vy);
-      const targetAngle=Math.atan2(m.y-state.y,m.x-state.x);
-      const diff=Math.abs(Math.atan2(Math.sin(state.angle-targetAngle),Math.cos(state.angle-targetAngle)));
-      if(speed>18){
-        log("Docking denied: relative speed too high. Reduce speed below 18 m/s.","warn");
-        setMessage("Docking approach too fast. Use counter-thrust until relative speed is below 18 m/s.");
-        return;
-      }
-      if(nearest.distance>35){
-        log("Docking port acquired. Move closer to complete docking.","warn");
-        return;
-      }
-      if(diff>0.95){
-        log("Docking alignment poor. Rotate toward the docking port.","warn");
-        setMessage("Docking alignment poor. Rotate toward the green docking port.");
-        return;
-      }
-      completeObjective(nearest.index);
-      return;
-    }
-    completeObjective(nearest.index);
-  }else{
-    log("Scan detected "+m.name+" at "+nearest.distance.toFixed(0)+" km. Move closer.","warn");
-    setMessage(m.name+" detected. Distance: "+nearest.distance.toFixed(0)+" km. Approach carefully to scan.");
-  }
-}
-
-function brake(){
-  if(!state.running||state.paused)return;
-  const speed=Math.hypot(state.vx,state.vy);
-  if(speed<.15){
-    state.vx=0;state.vy=0;
-    log("Drift already stabilized.");
-    return;
-  }
-  const factor=Math.max(0,1-0.85/(speed||1));
-  state.vx*=factor;
-  state.vy*=factor;
-  state.fuel=Math.max(0,state.fuel-.12);
-  log("Counter-thrust pulse applied.");
-}
-
-function requestStatus(){
-  const speed=Math.hypot(state.vx,state.vy);
-  log("State: "+state.mode+" | speed "+speed.toFixed(1)+" m/s | fuel "+state.fuel.toFixed(1)+"% | hull "+state.hull.toFixed(1)+"%.");
-}
-
-const keys=new Set();
-window.addEventListener("keydown",e=>{
-  const key=e.key.toLowerCase();
-  if([" ","arrowup","arrowdown","arrowleft","arrowright"].includes(key))e.preventDefault();
-  if(["w","a","s","d","q","e"," ","enter","p","r","arrowup","arrowdown","arrowleft","arrowright"].includes(key)){
-    keys.add(key);
-  }
-  if(key==="enter"&&!e.repeat)scanTarget();
-  if(key==="p"&&!e.repeat)togglePause();
-  if(key==="r"&&!e.repeat)resetMission();
-});
-window.addEventListener("keyup",e=>keys.delete(e.key.toLowerCase()));
-window.addEventListener("blur",()=>keys.clear());
-
-function bindTouch(button,control){
-  let timer=null;
-  const start=e=>{
-    e.preventDefault();
-    if(control==="scan"){scanTarget();return}
-    if(control==="brake"){brake();return}
-    if(control==="pause"){togglePause();return}
-    const map={forward:"w",back:"s",left:"a",right:"d",strafeLeft:"q",strafeRight:"e"};
-    const k=map[control];
-    if(k)keys.add(k);
-  };
-  const end=e=>{
-    e.preventDefault();
-    const map={forward:"w",back:"s",left:"a",right:"d",strafeLeft:"q",strafeRight:"e"};
-    const k=map[control];
-    if(k)keys.delete(k);
-  };
-  button.addEventListener("pointerdown",start);
-  button.addEventListener("pointerup",end);
-  button.addEventListener("pointercancel",end);
-  button.addEventListener("pointerleave",end);
-}
-document.querySelectorAll("[data-control]").forEach(b=>bindTouch(b,b.dataset.control));
-
-function updatePhysics(dt){
-  if(!state.running||state.paused||state.complete)return;
-  state.elapsed+=dt;
-  state.scanCooldown=Math.max(0,state.scanCooldown-dt);
-  state.battery=Math.max(0,state.battery-dt*.025);
-
-  if(state.mode==="ASCENT"){
-    const t=(performance.now()-state.launchTime)/1000;
-    state.altitude=Math.min(420,t*55);
-    if(t<2.5){
-      state.y+=dt*30;
-      state.vy=-35;
-    }else if(t<5.5){
-      state.x+=dt*24;
-      state.y-=dt*12;
-      state.vx=24;
-      state.vy=-12;
-    }else if(t<8){
-      state.x+=dt*15;
-      state.y+=dt*9;
-      state.vx=15;
-      state.vy=9;
-    }else{
-      state.mode="ORBIT";
-      state.vx=0;
-      state.vy=0;
-      state.altitude=420;
-      completeObjective(0);
-      log("Orbital insertion complete. Manual flight controls enabled.","good");
-      setMessage("Orbital insertion complete. Manual controls are now enabled. Head to Alpha Joint.");
-    }
-    return;
-  }
-
-  const rotateSpeed=2.3;
-  if(keys.has("a")||keys.has("arrowleft"))state.angle-=rotateSpeed*dt;
-  if(keys.has("d")||keys.has("arrowright"))state.angle+=rotateSpeed*dt;
-
-  let ax=0,ay=0;
-  const thrust=keys.has("w")||keys.has("arrowup");
-  const reverse=keys.has("s")||keys.has("arrowdown");
-  const strafeLeft=keys.has("q");
-  const strafeRight=keys.has("e");
-  const braking=keys.has(" ");
-
-  if(thrust&&state.fuel>0){
-    ax+=Math.cos(state.angle)*95;
-    ay+=Math.sin(state.angle)*95;
-    state.fuel=Math.max(0,state.fuel-dt*1.4);
-    state.thrusting=true;
-  }
-  if(reverse&&state.fuel>0){
-    ax-=Math.cos(state.angle)*48;
-    ay-=Math.sin(state.angle)*48;
-    state.fuel=Math.max(0,state.fuel-dt*.9);
-    state.thrusting=true;
-  }
-  if(strafeLeft&&state.fuel>0){
-    ax+=Math.cos(state.angle-Math.PI/2)*55;
-    ay+=Math.sin(state.angle-Math.PI/2)*55;
-    state.fuel=Math.max(0,state.fuel-dt*.8);
-    state.thrusting=true;
-  }
-  if(strafeRight&&state.fuel>0){
-    ax+=Math.cos(state.angle+Math.PI/2)*55;
-    ay+=Math.sin(state.angle+Math.PI/2)*55;
-    state.fuel=Math.max(0,state.fuel-dt*.8);
-    state.thrusting=true;
-  }
-  if(braking){
-    const speed=Math.hypot(state.vx,state.vy);
-    if(speed>.05){
-      const amount=Math.min(1,dt*2.4);
-      state.vx*=1-amount;
-      state.vy*=1-amount;
-      state.fuel=Math.max(0,state.fuel-dt*.45);
-    }
-  }
-  if(state.fuel<=0&&(thrust||reverse||strafeLeft||strafeRight)){
-    state.message="Propellant depleted. Use your remaining drift carefully.";
-  }
-
-  state.vx+=ax*dt;
-  state.vy+=ay*dt;
-
-  const maxSpeed=115;
-  const speed=Math.hypot(state.vx,state.vy);
-  if(speed>maxSpeed){
-    state.vx=state.vx/speed*maxSpeed;
-    state.vy=state.vy/speed*maxSpeed;
-  }
-
-  state.x+=state.vx*dt;
-  state.y+=state.vy*dt;
-
-  const bounds=600;
-  if(state.x>bounds){state.x=bounds;state.vx*=-.35;state.hull=Math.max(0,state.hull-2)}
-  if(state.x<-bounds){state.x=-bounds;state.vx*=-.35;state.hull=Math.max(0,state.hull-2)}
-  if(state.y>bounds){state.y=bounds;state.vy*=-.35;state.hull=Math.max(0,state.hull-2)}
-  if(state.y<-bounds){state.y=-bounds;state.vy*=-.35;state.hull=Math.max(0,state.hull-2)}
-
-  state.altitude=Math.max(100,420+state.y*.04);
-  if(state.hull<=0){
-    state.running=false;
-    state.mode="DISABLED";
-    log("Hull integrity critical. Flight controls disabled. Reset to try again.","bad");
-    setMessage("Spacecraft disabled. Reset the simulation to begin a new attempt.");
-    document.getElementById("connection").textContent="CRAFT DISABLED";
-  }
-}
-
-function drawBackground(time){
-  const w=canvas.width,h=canvas.height;
-  const grad=ctx.createRadialGradient(w*.48,h*.46,20,w*.48,h*.46,w*.8);
-  grad.addColorStop(0,"#101e3b");
-  grad.addColorStop(.55,"#070e20");
-  grad.addColorStop(1,"#02040c");
-  ctx.fillStyle=grad;ctx.fillRect(0,0,w,h);
-
-  for(const s of stars){
-    const twinkle=.7+.3*Math.sin(time*.001+s.p);
-    ctx.globalAlpha=s.a*twinkle;
-    ctx.fillStyle="#d9eeff";
-    ctx.fillRect(s.x,s.y,s.r,s.r);
-  }
-  ctx.globalAlpha=1;
-
-  ctx.save();
-  ctx.translate(w*.78,h*.73);
-  const earth=ctx.createRadialGradient(-30,-35,5,0,0,170);
-  earth.addColorStop(0,"#3b94bf");
-  earth.addColorStop(.55,"#15517c");
-  earth.addColorStop(1,"#06142d");
-  ctx.fillStyle=earth;
-  ctx.beginPath();ctx.arc(0,0,170,0,Math.PI*2);ctx.fill();
-  ctx.strokeStyle="#65d8ff33";ctx.lineWidth=3;
-  ctx.beginPath();ctx.ellipse(0,0,185,48,-.4,0,Math.PI*2);ctx.stroke();
-  ctx.fillStyle="#7ed8c7";
-  ctx.beginPath();ctx.ellipse(-40,-48,48,17,-.5,0,Math.PI*2);ctx.fill();
-  ctx.beginPath();ctx.ellipse(45,24,65,21,.3,0,Math.PI*2);ctx.fill();
-  ctx.fillStyle="#d4f5ff22";
-  ctx.beginPath();ctx.arc(-20,-10,155,3.4,5.5);ctx.fill();
-  ctx.restore();
-}
-
-function worldToScreen(x,y){
-  const scale=canvas.width/1050;
-  return {x:canvas.width*.48+(x-state.x)*scale,y:canvas.height*.5+(y-state.y)*scale};
-}
-
-function drawStation(time){
-  const p=worldToScreen(0,0);
-  ctx.save();
-  ctx.translate(p.x,p.y);
-  ctx.globalAlpha=.95;
-  ctx.strokeStyle="#8da7c9";
-  ctx.lineWidth=8;
-  ctx.beginPath();ctx.moveTo(-125,0);ctx.lineTo(125,0);ctx.stroke();
-  ctx.lineWidth=3;ctx.strokeStyle="#c0d6ec";
-  ctx.beginPath();ctx.moveTo(-170,0);ctx.lineTo(170,0);ctx.stroke();
-
-  drawModule(-100,-12,52,42,"#405e80");
-  drawModule(0,-12,55,48,"#334c70");
-  drawModule(104,-12,49,42,"#4b5f7b");
-  drawModule(0,66,45,38,"#374f71");
-  drawModule(0,-86,45,38,"#374f71");
-
-  ctx.fillStyle="#253e5c";
-  ctx.fillRect(-230,-22,45,44);
-  ctx.fillRect(185,-22,45,44);
-  ctx.strokeStyle="#b5d8ff";ctx.lineWidth=2;
-  ctx.strokeRect(-230,-22,45,44);ctx.strokeRect(185,-22,45,44);
-
-  ctx.fillStyle="#1d6f9e";
-  for(let i=0;i<4;i++){
-    ctx.fillRect(-215+i*9,-15,6,30);
-    ctx.fillRect(194+i*8,-15,5,30);
-  }
-
-  ctx.strokeStyle="#70edb8";ctx.lineWidth=3;
-  ctx.beginPath();ctx.arc(235,-100,24,0,Math.PI*2);ctx.stroke();
-  ctx.fillStyle="#4df0b5";
-  ctx.beginPath();ctx.arc(235,-100,7,0,Math.PI*2);ctx.fill();
-  ctx.globalAlpha=1;
-  ctx.restore();
-
-  function drawModule(x,y,w,h,color){
-    ctx.fillStyle=color;ctx.strokeStyle="#aec9e8";ctx.lineWidth=2;
-    ctx.beginPath();ctx.roundRect(x-w/2,y-h/2,w,h,8);ctx.fill();ctx.stroke();
-    ctx.fillStyle="#80c5e7";
-    for(let i=0;i<3;i++)ctx.fillRect(x-w/2+8+i*11,y-5,6,10);
-    ctx.strokeStyle="#b6e4ff";
-    ctx.beginPath();ctx.moveTo(x-w/2+5,y-h/2+7);ctx.lineTo(x+w/2-5,y-h/2+7);ctx.stroke();
-  }
-}
-
-function drawObjectives(){
-  missions.forEach((m,i)=>{
-    if(state.scanned[i])return;
-    const p=worldToScreen(m.x,m.y);
-    if(p.x<-50||p.x>canvas.width+50||p.y<-50||p.y>canvas.height+50)return;
-    const isDock=i===missions.length-1;
-    const color=isDock?"#70ffc0":"#4be9ff";
-    const pulse=1+Math.sin(performance.now()*.004+i)*.15;
-    ctx.save();
-    ctx.strokeStyle=color;ctx.fillStyle=color;
-    ctx.globalAlpha=.8;
-    ctx.lineWidth=2;
-    ctx.beginPath();ctx.arc(p.x,p.y,13*pulse,0,Math.PI*2);ctx.stroke();
-    ctx.beginPath();ctx.arc(p.x,p.y,3,0,Math.PI*2);ctx.fill();
-    ctx.font="11px Segoe UI,Arial";
-    ctx.fillText(m.name,p.x+18,p.y-10);
-    ctx.restore();
-  });
-}
-
-function drawShip(time){
-  const x=canvas.width*.48,y=canvas.height*.5;
-  ctx.save();
-  ctx.translate(x,y);
-  ctx.rotate(state.angle);
-  if(state.thrusting&&state.running&&!state.paused){
-    ctx.fillStyle="#ffbb69";
-    ctx.beginPath();ctx.moveTo(-15,-5);ctx.lineTo(-34,0);ctx.lineTo(-15,5);ctx.closePath();ctx.fill();
-    ctx.fillStyle="#53e7ff";
-    ctx.beginPath();ctx.moveTo(-15,-3);ctx.lineTo(-26,0);ctx.lineTo(-15,3);ctx.closePath();ctx.fill();
-  }
-  ctx.fillStyle="#d7e7f6";
-  ctx.strokeStyle="#65e6ff";ctx.lineWidth=2;
-  ctx.beginPath();ctx.moveTo(19,0);ctx.lineTo(-12,-11);ctx.lineTo(-8,0);ctx.lineTo(-12,11);ctx.closePath();
-  ctx.fill();ctx.stroke();
-  ctx.fillStyle="#3985b7";
-  ctx.beginPath();ctx.arc(1,0,4,0,Math.PI*2);ctx.fill();
-  ctx.strokeStyle="#b6d4ee";ctx.lineWidth=1.5;
-  ctx.beginPath();ctx.moveTo(-3,-7);ctx.lineTo(-9,-15);ctx.moveTo(-3,7);ctx.lineTo(-9,15);ctx.stroke();
-  ctx.restore();
-
-  ctx.save();
-  ctx.strokeStyle="#6deeff66";ctx.setLineDash([4,5]);
-  ctx.beginPath();ctx.arc(x,y,29,0,Math.PI*2);ctx.stroke();
-  ctx.restore();
-}
-
-function drawRadar(){
-  const w=radar.width,h=radar.height;
-  rctx.fillStyle="#050b17";rctx.fillRect(0,0,w,h);
-  rctx.strokeStyle="#243a58";rctx.lineWidth=1;
-  for(let i=1;i<4;i++){
-    rctx.beginPath();rctx.moveTo(w*i/4,0);rctx.lineTo(w*i/4,h);rctx.stroke();
-    rctx.beginPath();rctx.moveTo(0,h*i/4);rctx.lineTo(w,h*i/4);rctx.stroke();
-  }
-  rctx.strokeStyle="#2e4d71";
-  rctx.beginPath();rctx.arc(w/2,h/2,42,0,Math.PI*2);rctx.stroke();
-  const range=650;
-  missions.forEach((m,i)=>{
-    if(state.scanned[i])return;
-    const dx=m.x-state.x,dy=m.y-state.y;
-    const px=w/2+dx/range*w*.45,py=h/2+dy/range*h*.45;
-    if(px<3||px>w-3||py<3||py>h-3)return;
-    rctx.fillStyle=i===missions.length-1?"#6bffc1":"#50e8ff";
-    rctx.beginPath();rctx.arc(px,py,3,0,Math.PI*2);rctx.fill();
-  });
-  rctx.save();rctx.translate(w/2,h/2);rctx.rotate(state.angle);
-  rctx.fillStyle="#a6caff";rctx.beginPath();rctx.moveTo(9,0);rctx.lineTo(-6,-5);rctx.lineTo(-4,0);rctx.lineTo(-6,5);rctx.closePath();rctx.fill();
-  rctx.restore();
-}
-
-function updateObjectives(){
-  const el=document.getElementById("objectives");
-  el.innerHTML="";
-  let done=0;
-  missions.forEach((m,i)=>{
-    if(state.scanned[i])done++;
-    const item=document.createElement("div");
-    item.className="objective"+(state.scanned[i]?" done":"");
-    const check=document.createElement("div");
-    check.className="obj-check";check.textContent=state.scanned[i]?"✓":String(i+1).padStart(2,"0");
-    const text=document.createElement("div");
-    const title=document.createElement("div");title.className="obj-title";title.textContent=m.name;
-    const desc=document.createElement("div");desc.className="obj-desc";desc.textContent=state.scanned[i]?"Completed · +"+m.score+" points":m.desc;
-    text.append(title,desc);item.append(check,text);el.appendChild(item);
-  });
-  const pct=Math.round(done/missions.length*100);
-  document.getElementById("objectiveCount").textContent=done+" / "+missions.length;
-  document.getElementById("progressText").textContent=pct+"%";
-  document.getElementById("progressBar").style.width=pct+"%";
-}
-
-function setBar(id,value){
-  const el=document.getElementById(id);
-  el.style.width=Math.max(0,Math.min(100,value))+"%";
-  el.className="fill"+(value<20?" red":value<50?" orange":" green");
-}
-
-function updateUI(){
-  const speed=Math.hypot(state.vx,state.vy);
-  const nearest=getNearest();
-  document.getElementById("flightMode").textContent=state.mode;
-  document.getElementById("hudSpeed").textContent=speed.toFixed(1)+" m/s";
-  document.getElementById("hudAlt").textContent=state.altitude.toFixed(1)+" km";
-  document.getElementById("hudRange").textContent=nearest.index<0?"COMPLETE":nearest.distance.toFixed(0)+" km";
-  document.getElementById("fuelText").innerHTML=state.fuel.toFixed(0)+' <span class="unit">%</span>';
-  document.getElementById("batteryText").innerHTML=state.battery.toFixed(0)+' <span class="unit">%</span>';
-  document.getElementById("hullText").innerHTML=state.hull.toFixed(0)+' <span class="unit">%</span>';
-  document.getElementById("scoreText").innerHTML=String(state.score).padStart(4,"0")+' <span class="unit">PTS</span>';
-  setBar("fuelBar",state.fuel);setBar("batteryBar",state.battery);setBar("hullBar",state.hull);
-  document.getElementById("scoreBar").style.width=Math.min(100,state.score/15)+"%";
-  document.getElementById("stateText").textContent=state.mode;
-  document.getElementById("posX").textContent=state.x.toFixed(1)+" km";
-  document.getElementById("posY").textContent=state.y.toFixed(1)+" km";
-  document.getElementById("speedValue").textContent=speed.toFixed(1)+" m/s";
-  document.getElementById("targetText").textContent=nearest.index<0?"All complete":missions[nearest.index].name;
-  const target=nearest.index>=0?missions[nearest.index]:null;
-  if(target){
-    const targetAngle=Math.atan2(target.y-state.y,target.x-state.x);
-    const diff=Math.abs(Math.atan2(Math.sin(state.angle-targetAngle),Math.cos(state.angle-targetAngle)));
-    document.getElementById("alignText").textContent=Math.round(diff*180/Math.PI)+"°";
-  }else document.getElementById("alignText").textContent="COMPLETE";
-  const secs=Math.floor((state.elapsed||0));
-  document.getElementById("clock").textContent=String(Math.floor(secs/3600)).padStart(2,"0")+":"+
-    String(Math.floor(secs/60)%60).padStart(2,"0")+":"+String(secs%60).padStart(2,"0");
-  if(state.thrusting&&state.running&&!state.paused){
-    state.thrusting=false;
-  }
-}
-
-function frame(time){
-  const dt=Math.min(.04,Math.max(0,(time-(state.lastFrame||time))/1000));
-  state.lastFrame=time;
-  updatePhysics(dt);
-  drawBackground(time);
-  drawStation(time);
-  drawObjectives();
-  drawShip(time);
-  drawRadar();
-  updateUI();
-  requestAnimationFrame(frame);
-}
-
-document.addEventListener("visibilitychange",()=>{
-  if(document.hidden&&state.running&&!state.paused){
-    state.paused=true;
-    state.mode="PAUSED";
-    document.getElementById("pauseBtn").textContent="▶ RESUME";
-    log("Simulation auto-paused because the tab became inactive.","warn");
-  }
-});
-
-updateObjectives();
-updateUI();
-requestAnimationFrame(frame);
+const state={started:false,paused:false,complete:false,phase:'STANDBY',x:0,y:0,vx:0,vy:0,angle:-Math.PI/2,angularVelocity:0,fuel:100,battery:100,hull:100,score:0,elapsed:0,lastFrame:0,launchElapsed:0,objective:0,done:new Set(),keys:new Set(),held:new Set(),scanCooldown:0,toastTimer:null,stars:[],particles:[],events:[],sound:false,audio:null,lastLog:0,controlsUsed:false,scanned:new Set(),interacted:new Set(),thrusting:false,showHelpAfterStart:false};
+const rand=(a,b)=>a+Math.random()*(b-a);const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);const wrapAngle=a=>((a%(Math.PI*2))+(Math.PI*2))%(Math.PI*2);const fmtTime=s=>`${String(Math.floor(s/60)).padStart(2,'0')}:${String(Math.floor(s%60)).padStart(2,'0')}`;const fmtNum=n=>Math.round(n).toLocaleString('en-US');
+for(let i=0;i<260;i++)state.stars.push({x:Math.random(),y:Math.random(),r:rand(.35,1.65),a:rand(.15,.9),tw:rand(0,8)});
+function log(message,kind=''){const entry={message,kind,time:state.elapsed};state.events.unshift(entry);state.events=state.events.slice(0,24);renderLog();}
+function renderLog(){$('eventLog').innerHTML=state.events.map(e=>`<div class="log-entry ${e.kind}"><time>${fmtTime(e.time)} · FLIGHT CONTROL</time>${escapeHtml(e.message)}</div>`).join('');$('logCount').textContent=`${String(state.events.length).padStart(2,'0')} EVENTS`;}
+function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function toast(message){const el=$('toast');el.textContent=message;el.classList.add('show');clearTimeout(state.toastTimer);state.toastTimer=setTimeout(()=>el.classList.remove('show'),2700);}
+function beep(freq=560,duration=.08,type='sine'){if(!state.sound)return;try{state.audio=state.audio||new(window.AudioContext||window.webkitAudioContext)();const o=state.audio.createOscillator();const g=state.audio.createGain();o.type=type;o.frequency.value=freq;g.gain.setValueAtTime(.035,state.audio.currentTime);g.gain.exponentialRampToValueAtTime(.001,state.audio.currentTime+duration);o.connect(g);g.connect(state.audio.destination);o.start();o.stop(state.audio.currentTime+duration);}catch(e){}}
+function targetFor(i=state.objective){const o=OBJECTIVES[Math.min(i,OBJECTIVES.length-1)];return{x:o.x,y:o.y};}
+function targetDistance(){return distance(state,targetFor());}
+function currentObjective(){return OBJECTIVES[Math.min(state.objective,OBJECTIVES.length-1)];}
+function addScore(n,why){state.score+=n;$('scoreText').textContent=String(state.score).padStart(4,'0');$('scoreBar').style.width=`${clamp(state.score/20,0,100)}%`;if(why)log(`${why} (+${n} points)`,'good');}
+function completeObjective(index,message){if(state.done.has(index))return;state.done.add(index);state.objective=Math.min(OBJECTIVES.length,state.done.size);addScore(150,message||`Objective complete: ${OBJECTIVES[index].title}`);beep(840,.16,'triangle');renderObjectives();if(state.objective>=OBJECTIVES.length)finishMission();else{state.phase='IN PROGRESS';toast(`OBJECTIVE COMPLETE: ${OBJECTIVES[index].title}`);log(`Next objective: ${currentObjective().title}`,'good');}}
+function renderObjectives(){$('objectiveList').innerHTML=OBJECTIVES.map((o,i)=>{const done=state.done.has(i),active=!done&&i===state.objective;return `<div class="objective ${done?'done':''} ${active?'active':''}"><div class="objective-mark">${done?'✓':String(i+1).padStart(2,'0')}</div><div><div class="objective-title">${o.title}</div><div class="objective-desc">${o.desc}</div></div><div class="objective-state">${done?'Complete':active?'Current':'Pending'}</div></div>`}).join('');$('objectiveCount').textContent=`${state.done.size} / ${OBJECTIVES.length} COMPLETE`;}
+function startMission(){if(state.started)return;state.started=true;state.phase='LAUNCH SEQUENCE';state.launchElapsed=0;state.elapsed=0;state.lastFrame=performance.now();$('introModal').classList.remove('show');$('phaseLabel').textContent='LAUNCH SEQUENCE · T−03';$('telemetryState').textContent='PRE-FLIGHT';$('telemetryState').style.color='var(--amber)';log('Flight control link established. Welcome aboard, cadet.','good');log('Pre-flight checks running: guidance, power, attitude control.');toast('Mission started. Follow the checklist.');beep(420,.12);}
+function resetMission(){state.started=false;state.paused=false;state.complete=false;state.phase='STANDBY';state.x=0;state.y=0;state.vx=0;state.vy=0;state.angle=-Math.PI/2;state.angularVelocity=0;state.fuel=100;state.battery=100;state.hull=100;state.score=0;state.elapsed=0;state.lastFrame=performance.now();state.launchElapsed=0;state.objective=0;state.done.clear();state.keys.clear();state.held.clear();state.scanCooldown=0;state.controlsUsed=false;state.scanned.clear();state.interacted.clear();state.thrusting=false;state.events=[];$('introModal').classList.add('show');$('helpModal').classList.remove('show');$('resultModal').classList.remove('show');$('pauseBtn').textContent='Ⅱ Pause';$('phaseLabel').textContent='MISSION CONTROL · STANDBY';$('telemetryState').textContent='STANDBY';$('telemetryState').style.color='var(--amber)';renderObjectives();renderLog();updateHUD();log('Simulation initialized. Awaiting trainee.');}
+function finishMission(){state.complete=true;state.phase='MISSION COMPLETE';state.paused=true;$('resultScore');$('finalScore').textContent=String(state.score).padStart(4,'0');$('finalTime').textContent=fmtTime(state.elapsed);$('finalHull').textContent=`${Math.round(state.hull)}%`;$('resultMessage').textContent=state.hull>70?'Excellent work. You completed the orbital operations checklist while keeping the craft in safe condition.': 'Mission complete. Review your approach and try to finish with more hull integrity.';$('resultModal').classList.add('show');$('phaseLabel').textContent='MISSION COMPLETE';$('telemetryState').textContent='COMPLETE';$('telemetryState').style.color='var(--green)';log('All objectives completed. Training mission successful.','good');beep(980,.22,'triangle');}
+function scan(){if(!state.started){toast('Begin the mission first.');return}if(state.paused||state.complete)return;if(state.scanCooldown>0){toast('Scanner is recalibrating.');return}state.scanCooldown=1.3;state.battery=Math.max(0,state.battery-.3);viewport.classList.add('scanning');setTimeout(()=>viewport.classList.remove('scanning'),950);beep(670,.12);const o=currentObjective();if(o.type!=='scan'){if(o.type==='launch'||o.type==='control'){toast('Follow the current checklist objective first.');return}toast(`Current task: ${o.title}`);return}const d=targetDistance();if(d>175){toast(`Target outside scan range (${fmtNum(d)} m). Move closer.`);log(`Scan attempt rejected: target ${fmtNum(d)} m away.`,'warn');return}if(state.scanned.has(state.objective)){toast('This object has already been scanned.');return}state.scanned.add(state.objective);completeObjective(state.objective,`Scan verified: ${o.title}`);}
+function interact(){if(!state.started){toast('Begin the mission first.');return}if(state.paused||state.complete)return;const o=currentObjective();if(o.type==='launch'){toast('Complete the launch sequence first.');return}if(o.type==='control'){if(state.controlsUsed){completeObjective(state.objective,'Attitude controls calibrated');}else toast('Use the thrusters and stabilization controls first.');return}if(o.type==='scan'){toast('This objective requires a sensor scan. Press Enter.');return}const d=targetDistance();if(d>125){toast(`Too far to interact (${fmtNum(d)} m). Approach the highlighted target.`);return}if(o.type==='interact'){if(state.interacted.has(state.objective)){toast('Inspection already recorded.');return}state.interacted.add(state.objective);completeObjective(state.objective,`Inspection logged: ${o.title}`);return}if(o.type==='dock'){const speed=Math.hypot(state.vx,state.vy);const bearing=Math.abs(Math.atan2(Math.sin(Math.atan2(o.y-state.y,o.x-state.x)-state.angle),Math.cos(Math.atan2(o.y-state.y,o.x-state.x)-state.angle)));if(d>75){toast('Move closer to the docking port.');return}if(speed>20){toast('Relative speed too high. Stabilize before docking.');log('Docking hold: relative velocity exceeds safe approach limit.','warn');return}if(bearing>.75){toast('Align the nose with the docking port.');return}completeObjective(state.objective,'Soft capture confirmed. Docking complete.');}}
+function controlInput(name,dt){if(!state.started||state.paused||state.complete)return;const has=k=>state.keys.has(k)||state.held.has(k);let thrust=0,side=0,rot=0;if(has('w')||has('ArrowUp')||has('forward'))thrust+=1;if(has('s')||has('ArrowDown')||has('reverse'))thrust-=.7;if(has('q')||has('strafeLeft'))side-=.7;if(has('e')||has('strafeRight'))side+=.7;if(has('a')||has('ArrowLeft')||has('left'))rot-=1;if(has('d')||has('ArrowRight')||has('right'))rot+=1;const braking=has(' ')||has('Spacebar')||has('brake');if(thrust||side||rot)state.controlsUsed=true;state.angularVelocity+=rot*2.6*dt;state.angularVelocity*=Math.pow(.035,dt);state.angle+=state.angularVelocity*dt;const accel=88;if(thrust||side){const ax=(Math.cos(state.angle)*thrust+Math.cos(state.angle+Math.PI/2)*side)*accel;const ay=(Math.sin(state.angle)*thrust+Math.sin(state.angle+Math.PI/2)*side)*accel;state.vx+=ax*dt;state.vy+=ay*dt;state.fuel=Math.max(0,state.fuel-(Math.abs(thrust)+Math.abs(side))*.95*dt);state.thrusting=true;}else state.thrusting=false;if(braking){state.vx*=Math.pow(.035,dt);state.vy*=Math.pow(.035,dt);state.angularVelocity*=Math.pow(.01,dt);state.controlsUsed=true;}state.vx=clamp(state.vx,-160,state.vx<0?-160:160);state.vy=clamp(state.vy,-160,state.vy<0?-160:160);state.x+=state.vx*dt;state.y+=state.vy*dt;const speed=Math.hypot(state.vx,state.vy);if(speed>125){state.hull=Math.max(25,state.hull-(speed-125)*.003*dt);}state.battery=Math.max(0,state.battery-.012*dt);if(state.fuel<=0){state.vx*=Math.pow(.9,dt);state.vy*=Math.pow(.9,dt)}}
+function update(dt){if(!state.started||state.paused||state.complete)return;state.elapsed+=dt;state.scanCooldown=Math.max(0,state.scanCooldown-dt);if(state.phase==='LAUNCH SEQUENCE'){state.launchElapsed+=dt;const remain=Math.max(0,3-Math.floor(state.launchElapsed));$('launchCount').textContent=remain||'LIFTOFF';$('launchCount').classList.add('show');$('phaseLabel').textContent=`LAUNCH SEQUENCE · T−${String(remain).padStart(2,'0')}`;if(state.launchElapsed>=3){$('launchCount').classList.remove('show');state.phase='IN PROGRESS';$('phaseLabel').textContent='ORBITAL OPERATIONS · ACTIVE';state.done.add(0);state.objective=1;addScore(100,'Launch sequence complete');log('Liftoff confirmed. Microgravity environment active.','good');toast('Liftoff! Learn the controls, then calibrate attitude.');beep(740,.2,'triangle');renderObjectives();}return}controlInput(null,dt);if(state.objective===1&&state.controlsUsed&&Math.hypot(state.vx,state.vy)<45&&Math.abs(state.angularVelocity)<.2&&state.elapsed>4){completeObjective(1,'Attitude control calibration passed');}if(state.battery<=0){state.phase='POWER CONSERVATION';$('systems').textContent='LOW POWER';$('systems').style.color='var(--amber)'}if(state.fuel<15){$('fuelText').style.color='var(--amber)'}else $('fuelText').style.color='';if(state.hull<50){$('hullText').style.color='var(--red)';$('systems').textContent='CHECK HULL';$('systems').style.color='var(--red)'}else $('hullText').style.color='';}
+function resizeCanvas(c,context){const rect=c.getBoundingClientRect();const dpr=Math.min(window.devicePixelRatio||1,2);const w=Math.max(1,rect.width),h=Math.max(1,rect.height);if(c.width!==Math.round(w*dpr)||c.height!==Math.round(h*dpr)){c.width=Math.round(w*dpr);c.height=Math.round(h*dpr)}context.setTransform(dpr,0,0,dpr,0,0);return{w,h};}
+function drawBackground(c,w,h){const grad=c.createLinearGradient(0,0,w,h);grad.addColorStop(0,'#071127');grad.addColorStop(.5,'#030815');grad.addColorStop(1,'#0a1022');c.fillStyle=grad;c.fillRect(0,0,w,h);for(const s of state.stars){const twinkle=.65+.35*Math.sin(state.elapsed*1.4+s.tw);c.globalAlpha=s.a*twinkle;c.fillStyle=s.r>1.25?'#a5d9ff':'#d8eaff';c.beginPath();c.arc(s.x*w,s.y*h,s.r,0,Math.PI*2);c.fill()}c.globalAlpha=1;}
+function worldToScreen(wx,wy,w,h){const scale=Math.min(w/1000,h/650);return{x:w/2+(wx-state.x)*scale,y:h/2+(wy-state.y)*scale,scale};}
+function drawEarth(c,w,h){const x=w*.78,y=h*1.03,r=Math.min(w,h)*.48;const g=c.createRadialGradient(x-r*.25,y-r*.6,r*.1,x,y,r);g.addColorStop(0,'#245a93');g.addColorStop(.5,'#123b70');g.addColorStop(.78,'#0b224b');g.addColorStop(1,'#020714');c.fillStyle=g;c.beginPath();c.arc(x,y,r,Math.PI,Math.PI*2);c.fill();c.save();c.beginPath();c.arc(x,y,r,Math.PI,Math.PI*2);c.clip();c.globalAlpha=.4;for(let i=0;i<10;i++){c.strokeStyle=i%2?'#4b9fd5':'#4f8bbf';c.lineWidth=rand(1,4);c.beginPath();c.ellipse(x+rand(-r*.5,r*.5),y-r*.3+rand(-r*.2,r*.25),rand(r*.1,r*.4),rand(r*.015,r*.08),rand(-1,1),0,Math.PI*2);c.stroke()}c.restore();c.globalAlpha=1;}
+function drawStation(c,w,h){const points=[[-420,-100],[-250,-100],[-70,-100],[110,-100],[300,-100],[430,-100]];c.save();c.lineCap='round';c.strokeStyle='#6e91b8';c.lineWidth=12;const p=points.map(q=>worldToScreen(q[0],q[1],w,h));c.beginPath();p.forEach((q,i)=>i?c.lineTo(q.x,q.y):c.moveTo(q.x,q.y));c.stroke();c.strokeStyle='#c2d7e9';c.lineWidth=2;c.stroke();for(let i=0;i<points.length;i++){const q=p[i];c.fillStyle=i===2?'#244c64':'#182c43';c.strokeStyle='#9bb9d5';c.lineWidth=2;c.beginPath();c.roundRect(q.x-25,q.y-16,50,32,7);c.fill();c.stroke();c.fillStyle='#8bd9ee';c.fillRect(q.x-14,q.y-7,28,3);c.fillStyle='#5c718c';c.fillRect(q.x-14,q.y+1,28,3)}const rack=worldToScreen(520,70,w,h);c.save();c.translate(rack.x,rack.y);c.fillStyle='#172a42';c.strokeStyle='#80a9cb';c.lineWidth=2;c.fillRect(-24,-38,48,76);c.strokeRect(-24,-38,48,76);for(let j=0;j<4;j++){c.fillStyle=j%2?'#42637e':'#27465e';c.fillRect(-17,-29+j*17,34,12);c.fillStyle='#6af0ff';c.fillRect(10,-26+j*17,4,5)}c.restore();const hatch=worldToScreen(180,260,w,h);c.save();c.translate(hatch.x,hatch.y);c.rotate(.3);c.fillStyle='#203852';c.strokeStyle='#a3bfd8';c.lineWidth=3;c.beginPath();c.roundRect(-33,-28,66,56,10);c.fill();c.stroke();c.strokeStyle='#60e7ff';c.lineWidth=2;c.beginPath();c.arc(0,0,15,0,Math.PI*2);c.stroke();c.restore();const rack2=worldToScreen(-280,170,w,h);c.fillStyle='#233d55';c.strokeStyle='#a0bed5';c.lineWidth=2;c.fillRect(rack2.x-24,rack2.y-36,48,72);c.strokeRect(rack2.x-24,rack2.y-36,48,72);for(let j=0;j<3;j++){c.fillStyle='#75d9e9';c.fillRect(rack2.x-14,rack2.y-25+j*19,28,7)}const joint=worldToScreen(320,-140,w,h);c.fillStyle='#d4e5f4';c.beginPath();c.arc(joint.x,joint.y,7,0,Math.PI*2);c.fill();c.strokeStyle='#6f8ca8';c.lineWidth=3;c.beginPath();c.moveTo(joint.x-18,joint.y);c.lineTo(joint.x+18,joint.y);c.moveTo(joint.x,joint.y-18);c.lineTo(joint.x,joint.y+18);c.stroke();const dock=worldToScreen(-390,-230,w,h);c.save();c.translate(dock.x,dock.y);c.strokeStyle='#b5d5ec';c.lineWidth=7;c.beginPath();c.arc(0,0,30,0,Math.PI*2);c.stroke();c.strokeStyle='#5a88a9';c.lineWidth=2;c.beginPath();c.arc(0,0,18,0,Math.PI*2);c.stroke();c.fillStyle='#66eaff';c.beginPath();c.arc(0,0,4,0,Math.PI*2);c.fill();c.restore();c.restore();}
+function drawTarget(c,w,h){if(state.objective>=OBJECTIVES.length)return;const o=currentObjective();const pos=worldToScreen(o.x,o.y,w,h);const pulse=1+Math.sin(state.elapsed*4)*.12;c.save();c.strokeStyle='#5feaff';c.globalAlpha=.85;c.lineWidth=1.5;c.setLineDash([5,5]);c.beginPath();c.arc(pos.x,pos.y,30*pulse,0,Math.PI*2);c.stroke();c.setLineDash([]);c.beginPath();c.moveTo(pos.x-42,pos.y);c.lineTo(pos.x-25,pos.y);c.moveTo(pos.x+25,pos.y);c.lineTo(pos.x+42,pos.y);c.moveTo(pos.x,pos.y-42);c.lineTo(pos.x,pos.y-25);c.moveTo(pos.x,pos.y+25);c.lineTo(pos.x,pos.y+42);c.stroke();c.font='bold 10px ui-monospace,monospace';c.fillStyle='#9af4ff';c.textAlign='center';c.fillText(`TARGET ${String(state.objective+1).padStart(2,'0')}`,pos.x,pos.y-39);c.restore();}
+function drawCraft(c,w,h){const x=w/2,y=h/2;const angle=state.angle;c.save();c.translate(x,y);c.rotate(angle);if(state.thrusting&&state.fuel>0){const flame=c.createLinearGradient(-14,0,-42,0);flame.addColorStop(0,'#b7fbff');flame.addColorStop(.4,'#57dfff');flame.addColorStop(1,'#526eff00');c.fillStyle=flame;c.beginPath();c.moveTo(-12,-5);c.lineTo(-42,0);c.lineTo(-12,5);c.closePath();c.fill()}c.shadowColor='#57dfff';c.shadowBlur=17;c.fillStyle='#c4d9e8';c.strokeStyle='#effaff';c.lineWidth=2;c.beginPath();c.moveTo(23,0);c.lineTo(-13,-12);c.lineTo(-8,0);c.lineTo(-13,12);c.closePath();c.fill();c.stroke();c.shadowBlur=0;c.fillStyle='#253f5c';c.beginPath();c.ellipse(3,0,8,5,0,0,Math.PI*2);c.fill();c.strokeStyle='#71efff';c.lineWidth=1.5;c.beginPath();c.arc(5,0,3,0,Math.PI*2);c.stroke();c.fillStyle='#8b9dff';c.fillRect(-10,-15,9,5);c.fillRect(-10,10,9,5);c.restore();}
+function drawVelocity(c,w,h){const x=w/2,y=h/2;const speed=Math.hypot(state.vx,state.vy);if(speed>3){c.save();c.strokeStyle='#ffdb7c';c.globalAlpha=.7;c.setLineDash([3,4]);c.beginPath();c.moveTo(x,y);c.lineTo(x-state.vx*.24,y-state.vy*.24);c.stroke();c.setLineDash([]);c.restore()}}
+function drawSpace(){const {w,h}=resizeCanvas(canvas,ctx);drawBackground(ctx,w,h);drawEarth(ctx,w,h);drawStation(ctx,w,h);drawTarget(ctx,w,h);drawVelocity(ctx,w,h);drawCraft(ctx,w,h);if(!state.started){ctx.fillStyle='#b9d5f0';ctx.font='12px ui-monospace,monospace';ctx.textAlign='center';ctx.fillText('SIMULATION STANDBY',w/2,h*.74)}}
+function drawRadar(){const{w,h}=resizeCanvas(radar,rctx);rctx.fillStyle='#050b17';rctx.fillRect(0,0,w,h);const cx=w/2,cy=h/2,rad=Math.min(w,h)*.42;rctx.strokeStyle='#20364f';rctx.lineWidth=1;for(let i=1;i<=3;i++){rctx.beginPath();rctx.arc(cx,cy,rad*i/3,0,Math.PI*2);rctx.stroke()}rctx.beginPath();rctx.moveTo(cx,cy-rad);rctx.lineTo(cx,cy+rad);rctx.moveTo(cx-rad,cy);rctx.lineTo(cx+rad,cy);rctx.stroke();rctx.save();rctx.beginPath();rctx.rect(0,0,w,h);rctx.clip();const scale=rad/700;const target=targetFor();const tx=cx+(target.x-state.x)*scale,ty=cy+(target.y-state.y)*scale;rctx.fillStyle='#ffd479';rctx.shadowColor='#ffd479';rctx.shadowBlur=8;rctx.beginPath();rctx.arc(tx,ty,4,0,Math.PI*2);rctx.fill();rctx.shadowBlur=0;rctx.strokeStyle='#5feaff';rctx.lineWidth=2;rctx.beginPath();rctx.moveTo(cx,cy);rctx.lineTo(cx+Math.cos(state.angle)*12,cy+Math.sin(state.angle)*12);rctx.stroke();rctx.fillStyle='#5feaff';rctx.beginPath();rctx.arc(cx,cy,4,0,Math.PI*2);rctx.fill();rctx.restore();}
+function updateHUD(){const speed=Math.hypot(state.vx,state.vy);const d=targetDistance();$('hudTime').textContent=fmtTime(state.elapsed);$('hudVelocity').textContent=`${speed.toFixed(1)} m/s`;$('hudRange').textContent=`${fmtNum(d)} m`;$('fuelText').textContent=`${Math.round(state.fuel)}%`;$('batteryText').textContent=`${Math.round(state.battery)}%`;$('hullText').textContent=`${Math.round(state.hull)}%`;$('scoreText').textContent=String(state.score).padStart(4,'0');$('fuelBar').style.width=`${state.fuel}%`;$('batteryBar').style.width=`${state.battery}%`;$('hullBar').style.width=`${state.hull}%`;$('scoreBar').style.width=`${clamp(state.score/20,0,100)}%`;$('altitude').textContent=`${(408+Math.sin(state.x/1000)*.7).toFixed(1)} km`;$('speed').textContent=`${speed.toFixed(1)} m/s`;$('attitude').textContent=`${String(Math.round(wrapAngle(state.angle)*180/Math.PI)).padStart(3,'0')}°`;$('bearing').textContent=`${String(Math.round(wrapAngle(Math.atan2(targetFor().y-state.y,targetFor().x-state.x))*180/Math.PI)).padStart(3,'0')}°`;$('signal').textContent=`${Math.round(clamp(100-d/80,12,99))}%`;$('phaseLabel').textContent=state.phase==='IN PROGRESS'?'ORBITAL OPERATIONS · ACTIVE':state.phase==='LAUNCH SEQUENCE'?`LAUNCH SEQUENCE · T−${String(Math.max(0,3-Math.floor(state.launchElapsed))).padStart(2,'0')}`:state.phase;$('telemetryState').textContent=state.phase;$('systems').textContent=state.hull<50?'CHECK HULL':state.battery<20?'LOW POWER':'NOMINAL';}
+function frame(now){const dt=Math.min(.04,Math.max(0,(now-state.lastFrame)/1000||0));state.lastFrame=now;update(dt);drawSpace();drawRadar();if(state.started&&Math.floor(state.elapsed*5)%2===0)updateHUD();requestAnimationFrame(frame)}
+function togglePause(){if(!state.started||state.complete)return;state.paused=!state.paused;$('pauseBtn').textContent=state.paused?'▶ Resume':'Ⅱ Pause';if(state.paused){state.phase='PAUSED';log('Simulation paused by trainee.');}else{state.phase='IN PROGRESS';state.lastFrame=performance.now();log('Simulation resumed.');}updateHUD();}
+function bindHold(button,name){const down=e=>{e.preventDefault();state.held.add(name);button.classList.add('primary');};const up=e=>{e.preventDefault();state.held.delete(name);button.classList.remove('primary');};button.addEventListener('pointerdown',down);button.addEventListener('pointerup',up);button.addEventListener('pointercancel',up);button.addEventListener('pointerleave',up);}
+document.querySelectorAll('[data-control]').forEach(b=>bindHold(b,b.dataset.control));
+window.addEventListener('keydown',e=>{const key=e.key===' '?' ':e.key;if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(key))e.preventDefault();if(e.repeat&&['Enter','f','F','p','P'].includes(key))return;state.keys.add(key);if(key==='Enter')scan();if(key==='f'||key==='F')interact();if(key==='p'||key==='P')togglePause();if(key==='Escape'){if($('helpModal').classList.contains('show'))$('helpModal').classList.remove('show');else if(state.started)togglePause();}});
+window.addEventListener('keyup',e=>state.keys.delete(e.key===' '?' ':e.key));window.addEventListener('blur',()=>{state.keys.clear();state.held.clear()});
+$('startBtn').addEventListener('click',startMission);$('briefingBtn').addEventListener('click',()=>{$('introModal').classList.remove('show');$('helpModal').classList.add('show');state.showHelpAfterStart=true});$('helpBtn').addEventListener('click',()=>$('helpModal').classList.add('show'));$('closeHelp').addEventListener('click',()=>{$('helpModal').classList.remove('show');if(state.showHelpAfterStart){state.showHelpAfterStart=false;$('introModal').classList.add('show')}});$('scanBtn').addEventListener('click',scan);$('interactBtn').addEventListener('click',interact);$('pauseBtn').addEventListener('click',togglePause);$('resetBtn').addEventListener('click',resetMission);$('againBtn').addEventListener('click',resetMission);$('reportBtn').addEventListener('click',()=>{$('resultModal').classList.remove('show');toast(`Debrief: score ${state.score}, hull ${Math.round(state.hull)}%, flight time ${fmtTime(state.elapsed)}.`)});$('soundBtn').addEventListener('click',()=>{state.sound=!state.sound;$('soundBtn').textContent=`Sound: ${state.sound?'On':'Off'}`;$('soundBtn').setAttribute('aria-pressed',String(state.sound));if(state.sound)beep(650,.1)});
+window.addEventListener('resize',()=>{drawSpace();drawRadar()});
+renderObjectives();log('Simulation initialized. Awaiting trainee.');updateHUD();state.lastFrame=performance.now();requestAnimationFrame(frame);
+})();
 </script>
 </body>
-</html>
-"""
+</html>"""
+
+@app.after_request
+def add_security_headers(response):
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "SAMEORIGIN"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Cache-Control"] = "no-store"
+    return response
 
 @app.get("/")
-def home():
+def index():
+    # A fresh session identifier keeps the browser session distinct without requiring a database.
+    if "mission_id" not in session:
+        session["mission_id"] = secrets.token_hex(8)
     return render_template_string(PAGE)
 
 @app.get("/health")
 def health():
-    return jsonify({
-        "status": "ok",
-        "application": "Kibo Junior Astronaut Mission Trainer"
-    })
+    return jsonify(status="ok", app="KIBO Junior Astronaut Mission Trainer", version="1.0.0")
+
+@app.errorhandler(404)
+def not_found(_error):
+    return jsonify(error="Not found"), 404
+
+@app.errorhandler(500)
+def server_error(_error):
+    return jsonify(error="Internal server error"), 500
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
+    port = int(os.environ.get("PORT", "5000"))
     app.run(host="0.0.0.0", port=port, debug=False)
-```
