@@ -439,8 +439,15 @@ button { -webkit-tap-highlight-color: transparent; }
 }
 
 
-.autonomous-console { margin-top: 14px; border-color: rgba(99,230,255,.3); }
-.program-intro { margin: 0 0 12px; color: #a9bfd2; font-size: 12px; line-height: 1.6; }
+.autonomous-console { margin-top: 0; margin-bottom: 14px; border-color: rgba(99,230,255,.48); box-shadow: 0 12px 34px rgba(0,0,0,.16); }
+.how-to-play { margin: 0 0 16px; padding: 15px 17px; border: 1px solid rgba(99,230,255,.32); border-radius: 12px; background: linear-gradient(135deg, rgba(24,65,88,.9), rgba(14,35,51,.96)); color: #eaf7ff; }
+.how-to-play h3 { margin: 0 0 9px; font-size: 15px; color: #8de7ff; }
+.how-to-play ol { margin: 0 0 10px; padding-left: 22px; }
+.how-to-play li { margin: 6px 0; color: #d5e7f4; font-size: 12px; line-height: 1.55; }
+.how-to-play strong { color: #fff; }
+.how-to-play p { margin: 10px 0 0; padding-top: 10px; border-top: 1px solid rgba(180,220,245,.18); color: #c5dceb; font-size: 11px; line-height: 1.65; }
+.how-to-play code { color: #8de7ff; }
+.program-intro { margin: 0 0 12px; color: #d1e2ef; font-size: 12px; line-height: 1.6; }
 .program-label { display:block; margin-bottom:7px; color:var(--cyan); font-size:10px; font-weight:900; letter-spacing:.15em; }
 #programEditor { display:block; width:100%; min-height:250px; resize:vertical; padding:14px; border:1px solid rgba(99,230,255,.25); border-radius:11px; outline:none; color:#c8f4ff; background:#050d17; font:12px/1.8 var(--mono); tab-size:2; }
 #programEditor:focus { border-color:var(--cyan); box-shadow:0 0 0 2px rgba(99,230,255,.08); }
@@ -473,46 +480,20 @@ body.autonomous-mode .control-strip, body.autonomous-mode .mobile-controls, body
 </header>
 <main class="layout">
   <section class="main-column">
-    <div class="stage-frame">
-      <canvas id="gameCanvas" tabindex="0" aria-label="Kibo module mission simulator"></canvas>
-      <div class="stage-vignette"></div>
-      <div class="stage-topline">
-        <div class="stage-label">
-          <div class="eyebrow">Current location</div>
-          <div class="stage-location" id="locationName">KIBO PRESSURIZED MODULE</div>
-          <div class="stage-coordinates" id="coordinateReadout">X 00.0 · Y 00.0 · HDG 000°</div>
-        </div>
-        <div class="stage-alert" id="stageAlert">MISSION CONTROL LINK ESTABLISHED<br>AWAITING LAUNCH AUTHORIZATION</div>
-      </div>
-      <div class="hud-bottom">
-        <div class="hud-readouts">
-          <div class="hud-readout"><div class="readout-label">Mission time</div><div class="readout-value" id="timerReadout">00:00</div></div>
-          <div class="hud-readout"><div class="readout-label">Velocity</div><div class="readout-value"><span id="speedReadout">0.0</span><span style="font-size:9px;color:var(--muted)"> m/s</span></div></div>
-        </div>
-        <div class="scan-indicator" id="scanIndicator">● SCANNER STANDBY</div>
-      </div>
-      <div class="center-overlay" id="launchOverlay">
-        <div class="launch-card" id="launchCard">
-          <div class="launch-symbol">
-            <svg viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="23" stroke="currentColor" stroke-width="1.5"/><circle cx="32" cy="32" r="13" stroke="currentColor" stroke-width="1.5" stroke-dasharray="4 4"/><circle cx="32" cy="32" r="5" fill="#82ffc1"/><path d="M32 3v10M32 51v10M3 32h10M51 32h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="m21 21 7 7m8 8 7 7m0-22-7 7m-8 8-7 7" stroke="currentColor" stroke-width="1.3" opacity=".7"/></svg>
-          </div>
-          <div class="eyebrow">Mission operations · training console</div>
-          <h2 class="launch-title">READY FOR<br><span>DEPLOYMENT</span></h2>
-          <p class="launch-description">Program an Int-Ball2-inspired inspection robot to autonomously visit inspection checkpoints. Write the command sequence, launch the mission, and review its accuracy, heading, and route time.</p>
-          <div class="launch-note"><strong>TRAINING SIMULATOR NOTICE</strong><br>This is an independent educational practice project, not an official JAXA or NASA simulator. Locations and scoring are illustrative until official mission materials specify otherwise.</div>
-          <button class="primary-button launch-button" id="launchButton">▶ &nbsp; Begin launch sequence</button>
-          <div class="launch-foot">AUTONOMOUS PROGRAMMING · NO MANUAL STEERING</div>
-        </div>
-      </div>
-    </div>
-    <div class="target-banner" id="targetBanner" style="display:none">
-      <div><strong id="targetBannerTitle">Checkpoint in range</strong><span id="targetBannerText">Align the robot and scan the marker.</span></div>
-      <button class="primary-button" id="targetBannerButton">SCAN TARGET</button>
-    </div>
     <section class="panel autonomous-console" id="autonomousConsole">
       <div class="panel-header"><h2 class="panel-title">Autonomous program editor</h2><span class="panel-kicker" id="programState">NOT RUNNING</span></div>
       <div class="panel-body">
-        <p class="program-intro">Write a sequence of commands, then run it. The robot navigates and scans checkpoints without manual steering.</p>
+        <div class="how-to-play" aria-label="How to run an autonomous mission">
+          <h3>How to run your first autonomous mission</h3>
+          <ol>
+            <li><strong>Read the mission script.</strong> Each line is one command. The sample route is already filled in for you.</li>
+            <li><strong>Begin the launch sequence.</strong> Use the launch button over the Kibo scene below and wait for the countdown to finish.</li>
+            <li><strong>Click “Run autonomous mission”.</strong> The robot follows the script on its own. Do not use WASD to steer it.</li>
+            <li><strong>Watch the mission.</strong> The active command, checkpoint list, timer, battery, and mission log show what is happening.</li>
+            <li><strong>Improve and retry.</strong> If a command fails, click Stop, edit the script, and run it again. “Restore sample” brings back the working example.</li>
+          </ol>
+          <p><strong>Command guide:</strong> <code>MOVE_TO checkpoint-id</code> moves to a named checkpoint; <code>ALIGN</code> adjusts the camera heading; <code>SCAN</code> records the AR marker; <code>WAIT 1</code> pauses for one second.</p>
+        </div>
         <label class="program-label" for="programEditor">MISSION SCRIPT</label>
         <textarea id="programEditor" spellcheck="false" aria-label="Autonomous mission script">MOVE_TO dock
 ALIGN
@@ -541,6 +522,42 @@ SCAN</textarea>
         <div class="command-reference"><strong>Commands:</strong> <code>MOVE_TO dock|joint-a|hatch|rack|joint-b|goal</code>, <code>ALIGN</code>, <code>SCAN</code>, <code>WAIT 1</code>. Lines starting with # are ignored.</div>
       </div>
     </section>
+    <div class="stage-frame">
+      <canvas id="gameCanvas" tabindex="0" aria-label="Kibo module mission simulator"></canvas>
+      <div class="stage-vignette"></div>
+      <div class="stage-topline">
+        <div class="stage-label">
+          <div class="eyebrow">Current location</div>
+          <div class="stage-location" id="locationName">KIBO PRESSURIZED MODULE</div>
+          <div class="stage-coordinates" id="coordinateReadout">X 00.0 · Y 00.0 · HDG 000°</div>
+        </div>
+        <div class="stage-alert" id="stageAlert">MISSION CONTROL LINK ESTABLISHED<br>AWAITING LAUNCH AUTHORIZATION</div>
+      </div>
+      <div class="hud-bottom">
+        <div class="hud-readouts">
+          <div class="hud-readout"><div class="readout-label">Mission time</div><div class="readout-value" id="timerReadout">00:00</div></div>
+          <div class="hud-readout"><div class="readout-label">Velocity</div><div class="readout-value"><span id="speedReadout">0.0</span><span style="font-size:9px;color:var(--muted)"> m/s</span></div></div>
+        </div>
+        <div class="scan-indicator" id="scanIndicator">● SCANNER STANDBY</div>
+      </div>
+      <div class="center-overlay" id="launchOverlay">
+        <div class="launch-card" id="launchCard">
+          <div class="launch-symbol">
+            <svg viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="23" stroke="currentColor" stroke-width="1.5"/><circle cx="32" cy="32" r="13" stroke="currentColor" stroke-width="1.5" stroke-dasharray="4 4"/><circle cx="32" cy="32" r="5" fill="#82ffc1"/><path d="M32 3v10M32 51v10M3 32h10M51 32h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="m21 21 7 7m8 8 7 7m0-22-7 7m-8 8-7 7" stroke="currentColor" stroke-width="1.3" opacity=".7"/></svg>
+          </div>
+          <div class="eyebrow">Mission operations · training console</div>
+          <h2 class="launch-title">READY FOR<br><span>DEPLOYMENT</span></h2>
+          <p class="launch-description">This is a programming challenge, not a driving game. First click Begin launch sequence. After the countdown, use the Autonomous program editor at the top of the page and click Run autonomous mission. The robot will follow the command list by itself.</p>
+          <div class="launch-note"><strong>TRAINING SIMULATOR NOTICE</strong><br>This is an independent educational practice project, not an official JAXA or NASA simulator. Locations and scoring are illustrative until official mission materials specify otherwise.</div>
+          <button class="primary-button launch-button" id="launchButton">▶ &nbsp; Begin launch sequence</button>
+          <div class="launch-foot">AUTONOMOUS PROGRAMMING · NO MANUAL STEERING</div>
+        </div>
+      </div>
+    </div>
+    <div class="target-banner" id="targetBanner" style="display:none">
+      <div><strong id="targetBannerTitle">Checkpoint in range</strong><span id="targetBannerText">Align the robot and scan the marker.</span></div>
+      <button class="primary-button" id="targetBannerButton">SCAN TARGET</button>
+    </div>
     <div class="control-strip">
       <div class="control-group"><span class="keycap">W</span><span class="keycap">A</span><span class="keycap">S</span><span class="keycap">D</span><span class="control-label">Translate</span></div>
       <div class="control-group"><span class="keycap">←</span><span class="keycap">→</span><span class="control-label">Rotate heading</span></div>
@@ -1825,13 +1842,13 @@ function resetMission(showMessage = true) {
   state.autoCommand = null;
   state.autoWait = 0;
   state.autoStall = 0;
-  document.body.classList.remove('autonomous-mode');
+  document.body.classList.add('autonomous-mode');
   state.bestAlignment = 180;
   state.keys.clear();
   state.touch = { up: false, down: false, left: false, right: false };
   state.player = { x: 125, y: 360, vx: 0, vy: 0, angle: 0, radius: 15, trail: [], lastX: 125, lastY: 360 };
   UI.overlay.style.display = 'flex';
-  UI.launchCard.innerHTML = `<div class="launch-symbol"><svg viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="23" stroke="currentColor" stroke-width="1.5"/><circle cx="32" cy="32" r="13" stroke="currentColor" stroke-width="1.5" stroke-dasharray="4 4"/><circle cx="32" cy="32" r="5" fill="#82ffc1"/><path d="M32 3v10M32 51v10M3 32h10M51 32h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div><div class="eyebrow">Mission operations · training console</div><h2 class="launch-title">READY FOR<br><span>DEPLOYMENT</span></h2><p class="launch-description">Program an Int-Ball2-inspired inspection robot to autonomously visit inspection checkpoints. Write the command sequence, launch the mission, and review its accuracy, heading, and route time.</p><div class="launch-note"><strong>TRAINING SIMULATOR NOTICE</strong><br>This is an independent educational practice project, not an official JAXA or NASA simulator. Locations and scoring are illustrative until official mission materials specify otherwise.</div><button class="primary-button launch-button" id="launchButton">▶ &nbsp; Begin launch sequence</button><div class="launch-foot">KEYBOARD + TOUCH CONTROLS · TRAINING BUILD</div>`;
+  UI.launchCard.innerHTML = `<div class="launch-symbol"><svg viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="23" stroke="currentColor" stroke-width="1.5"/><circle cx="32" cy="32" r="13" stroke="currentColor" stroke-width="1.5" stroke-dasharray="4 4"/><circle cx="32" cy="32" r="5" fill="#82ffc1"/><path d="M32 3v10M32 51v10M3 32h10M51 32h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div><div class="eyebrow">Mission operations · training console</div><h2 class="launch-title">READY FOR<br><span>DEPLOYMENT</span></h2><p class="launch-description">Program an Int-Ball2-inspired inspection robot to autonomously visit inspection checkpoints. Write the command sequence, launch the mission, and review its accuracy, heading, and route time.</p><div class="launch-note"><strong>TRAINING SIMULATOR NOTICE</strong><br>This is an independent educational practice project, not an official JAXA or NASA simulator. Locations and scoring are illustrative until official mission materials specify otherwise.</div><button class="primary-button launch-button" id="launchButton">▶ &nbsp; Begin launch sequence</button><div class="launch-foot">AUTONOMOUS PROGRAMMING · NO MANUAL STEERING</div>`;
   document.getElementById('launchButton').addEventListener('click', beginLaunch);
   UI.targetBanner.classList.remove('visible');
   renderObjectives();
