@@ -438,9 +438,23 @@ button { -webkit-tap-highlight-color: transparent; }
   .toast { max-width: calc(100vw - 18px); }
 }
 
+
+.autonomous-console { margin-top: 14px; border-color: rgba(99,230,255,.3); }
+.program-intro { margin: 0 0 12px; color: #a9bfd2; font-size: 12px; line-height: 1.6; }
+.program-label { display:block; margin-bottom:7px; color:var(--cyan); font-size:10px; font-weight:900; letter-spacing:.15em; }
+#programEditor { display:block; width:100%; min-height:250px; resize:vertical; padding:14px; border:1px solid rgba(99,230,255,.25); border-radius:11px; outline:none; color:#c8f4ff; background:#050d17; font:12px/1.8 var(--mono); tab-size:2; }
+#programEditor:focus { border-color:var(--cyan); box-shadow:0 0 0 2px rgba(99,230,255,.08); }
+.program-toolbar { display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
+.program-toolbar .primary-button { flex:1 1 220px; }
+.program-status { margin-top:11px; padding:10px 12px; border:1px solid var(--line); border-radius:9px; color:#b6d7e8; background:rgba(5,14,24,.72); font-size:11px; line-height:1.5; }
+.command-reference { margin-top:10px; color:#839fb4; font-size:10px; line-height:1.8; }
+.command-reference code { color:#8de7ff; white-space:normal; }
+body.autonomous-mode .control-strip, body.autonomous-mode .mobile-controls, body.autonomous-mode .mobile-actions { display:none !important; }
+@media(max-width:560px) { #programEditor { min-height:210px; font-size:11px; } .program-toolbar button { width:100%; } }
+
 </style>
 </head>
-<body>
+<body class="autonomous-mode">
 <div class="app-shell">
 <header class="topbar">
   <div class="brand">
@@ -484,17 +498,49 @@ button { -webkit-tap-highlight-color: transparent; }
           </div>
           <div class="eyebrow">Mission operations · training console</div>
           <h2 class="launch-title">READY FOR<br><span>DEPLOYMENT</span></h2>
-          <p class="launch-description">Pilot an Int-Ball2-inspired inspection drone through a finite Kibo module. Visit every AR checkpoint, align your heading, and complete the inspection route before returning to the goal point.</p>
+          <p class="launch-description">Program an Int-Ball2-inspired inspection robot to autonomously visit inspection checkpoints. Write the command sequence, launch the mission, and review its accuracy, heading, and route time.</p>
           <div class="launch-note"><strong>TRAINING SIMULATOR NOTICE</strong><br>This is an independent educational practice project, not an official JAXA or NASA simulator. Locations and scoring are illustrative until official mission materials specify otherwise.</div>
           <button class="primary-button launch-button" id="launchButton">▶ &nbsp; Begin launch sequence</button>
-          <div class="launch-foot">KEYBOARD + TOUCH CONTROLS · AUTOSAVING DISABLED</div>
+          <div class="launch-foot">AUTONOMOUS PROGRAMMING · NO MANUAL STEERING</div>
         </div>
       </div>
     </div>
-    <div class="target-banner" id="targetBanner">
+    <div class="target-banner" id="targetBanner" style="display:none">
       <div><strong id="targetBannerTitle">Checkpoint in range</strong><span id="targetBannerText">Align the robot and scan the marker.</span></div>
       <button class="primary-button" id="targetBannerButton">SCAN TARGET</button>
     </div>
+    <section class="panel autonomous-console" id="autonomousConsole">
+      <div class="panel-header"><h2 class="panel-title">Autonomous program editor</h2><span class="panel-kicker" id="programState">NOT RUNNING</span></div>
+      <div class="panel-body">
+        <p class="program-intro">Write a sequence of commands, then run it. The robot navigates and scans checkpoints without manual steering.</p>
+        <label class="program-label" for="programEditor">MISSION SCRIPT</label>
+        <textarea id="programEditor" spellcheck="false" aria-label="Autonomous mission script">MOVE_TO dock
+ALIGN
+SCAN
+MOVE_TO joint-a
+ALIGN
+SCAN
+MOVE_TO hatch
+ALIGN
+SCAN
+MOVE_TO rack
+ALIGN
+SCAN
+MOVE_TO joint-b
+ALIGN
+SCAN
+MOVE_TO goal
+ALIGN
+SCAN</textarea>
+        <div class="program-toolbar">
+          <button class="primary-button" id="runProgramButton">▶ Run autonomous mission</button>
+          <button class="secondary-button" id="stopProgramButton">■ Stop</button>
+          <button class="secondary-button" id="sampleProgramButton">Restore sample</button>
+        </div>
+        <div class="program-status" id="programStatus" role="status">Edit the script if you like. Commands are executed in order after launch.</div>
+        <div class="command-reference"><strong>Commands:</strong> <code>MOVE_TO dock|joint-a|hatch|rack|joint-b|goal</code>, <code>ALIGN</code>, <code>SCAN</code>, <code>WAIT 1</code>. Lines starting with # are ignored.</div>
+      </div>
+    </section>
     <div class="control-strip">
       <div class="control-group"><span class="keycap">W</span><span class="keycap">A</span><span class="keycap">S</span><span class="keycap">D</span><span class="control-label">Translate</span></div>
       <div class="control-group"><span class="keycap">←</span><span class="keycap">→</span><span class="control-label">Rotate heading</span></div>
@@ -523,7 +569,7 @@ button { -webkit-tap-highlight-color: transparent; }
         <div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><span class="panel-kicker">Route completion</span><strong id="progressPercent" style="font-family:var(--mono);font-size:12px;color:var(--cyan)">0%</strong></div>
         <div class="mission-progress"><div class="mission-progress-fill" id="missionProgressFill"></div></div>
         <div class="objective-list" id="objectiveList"></div>
-        <div class="help-tip">Your next target is highlighted. Move close, face the marker, then use <strong>F</strong> or the Scan button. If you miss a scan, reposition and try again.</div>
+        <div class="help-tip">Your next target is highlighted. Use the program editor to command autonomous movement, alignment, and scanning. The robot performs each step without manual steering.</div>
       </div>
     </section>
     <section class="panel">
@@ -677,7 +723,15 @@ const state = {
   scanResults: [],
   lastTargetId: null,
   bestAlignment: 180,
-  missionStartWallTime: 0
+  missionStartWallTime: 0,
+  autoRunning: false,
+  program: [],
+  programIndex: 0,
+  autoPath: [],
+  autoCommand: null,
+  autoWait: 0,
+  autoStall: 0,
+  autoLastPosition: { x: 125, y: 360 }
 };
 let canvasWidth = 1200;
 let canvasHeight = 720;
@@ -871,11 +925,11 @@ function addTextBlock(parent, heading, text) {
 
 function showHelp() {
   const fragment = document.createDocumentFragment();
-  addTextBlock(fragment, 'Movement', 'Use W/A/S/D or the arrow keys to move through the module. The controls are relative to the room, not to the direction the drone faces. Use the left and right arrow keys to rotate your heading. Movement slows near walls and racks.');
-  addTextBlock(fragment, 'Scan a checkpoint', 'Move within roughly 90 world units of the highlighted checkpoint. Face the target heading shown in telemetry; a low angular error gives a better scan score. Press F or E to scan. The scan button also works when you are in range.');
+  addTextBlock(fragment, 'Movement', 'Write commands in the program editor and press Run autonomous mission. The robot follows its own route; no manual steering is required during the mission.');
+  addTextBlock(fragment, 'Scan a checkpoint', 'The script uses MOVE_TO, ALIGN, and SCAN. The autonomous controller navigates toward the active marker, aligns the camera, stabilizes, and records the scan.');
   addTextBlock(fragment, 'Mission sequence', 'Release at the docking station, scan each highlighted AR marker in order, then return to the goal checkpoint. The objective list updates automatically after a successful scan.');
-  addTextBlock(fragment, 'Recovery', 'If you are stuck near a target, press R to stabilize, rotate using the arrows, and move away before approaching again. Press H to reopen this guide. Restart Mission resets the route.');
-  showModal('Pilot help & controls', fragment);
+  addTextBlock(fragment, 'Recovery', 'If a command fails, stop the program, edit the script, and run it again. Restart Mission resets the simulated route.');
+  showModal('Autonomous mission help', fragment);
 }
 
 function showRouteBriefing() {
@@ -1570,7 +1624,7 @@ function stabilize() {
   showToast('Stabilization engaged.', 'success', 1800);
 }
 
-function updatePlayer(delta) {
+function updatePlayerManual(delta) {
   const player = state.player;
   const keys = state.keys;
   const touch = state.touch;
@@ -1764,12 +1818,20 @@ function resetMission(showMessage = true) {
   state.scanFeedback = '';
   state.logs = [];
   state.scanResults = [];
+  state.autoRunning = false;
+  state.program = [];
+  state.programIndex = 0;
+  state.autoPath = [];
+  state.autoCommand = null;
+  state.autoWait = 0;
+  state.autoStall = 0;
+  document.body.classList.remove('autonomous-mode');
   state.bestAlignment = 180;
   state.keys.clear();
   state.touch = { up: false, down: false, left: false, right: false };
   state.player = { x: 125, y: 360, vx: 0, vy: 0, angle: 0, radius: 15, trail: [], lastX: 125, lastY: 360 };
   UI.overlay.style.display = 'flex';
-  UI.launchCard.innerHTML = `<div class="launch-symbol"><svg viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="23" stroke="currentColor" stroke-width="1.5"/><circle cx="32" cy="32" r="13" stroke="currentColor" stroke-width="1.5" stroke-dasharray="4 4"/><circle cx="32" cy="32" r="5" fill="#82ffc1"/><path d="M32 3v10M32 51v10M3 32h10M51 32h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div><div class="eyebrow">Mission operations · training console</div><h2 class="launch-title">READY FOR<br><span>DEPLOYMENT</span></h2><p class="launch-description">Pilot an Int-Ball2-inspired inspection drone through a finite Kibo module. Visit every AR checkpoint, align your heading, and complete the inspection route before returning to the goal point.</p><div class="launch-note"><strong>TRAINING SIMULATOR NOTICE</strong><br>This is an independent educational practice project, not an official JAXA or NASA simulator. Locations and scoring are illustrative until official mission materials specify otherwise.</div><button class="primary-button launch-button" id="launchButton">▶ &nbsp; Begin launch sequence</button><div class="launch-foot">KEYBOARD + TOUCH CONTROLS · TRAINING BUILD</div>`;
+  UI.launchCard.innerHTML = `<div class="launch-symbol"><svg viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="23" stroke="currentColor" stroke-width="1.5"/><circle cx="32" cy="32" r="13" stroke="currentColor" stroke-width="1.5" stroke-dasharray="4 4"/><circle cx="32" cy="32" r="5" fill="#82ffc1"/><path d="M32 3v10M32 51v10M3 32h10M51 32h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div><div class="eyebrow">Mission operations · training console</div><h2 class="launch-title">READY FOR<br><span>DEPLOYMENT</span></h2><p class="launch-description">Program an Int-Ball2-inspired inspection robot to autonomously visit inspection checkpoints. Write the command sequence, launch the mission, and review its accuracy, heading, and route time.</p><div class="launch-note"><strong>TRAINING SIMULATOR NOTICE</strong><br>This is an independent educational practice project, not an official JAXA or NASA simulator. Locations and scoring are illustrative until official mission materials specify otherwise.</div><button class="primary-button launch-button" id="launchButton">▶ &nbsp; Begin launch sequence</button><div class="launch-foot">KEYBOARD + TOUCH CONTROLS · TRAINING BUILD</div>`;
   document.getElementById('launchButton').addEventListener('click', beginLaunch);
   UI.targetBanner.classList.remove('visible');
   renderObjectives();
@@ -1813,7 +1875,8 @@ function beginLaunch() {
       UI.overlay.style.display = 'none';
       canvas.focus({ preventScroll: true });
       addLog('Launch successful. Int-Ball2 training unit deployed.', 'success');
-      addLog('Objective 1: confirm docking station release.', 'normal');
+      addLog('Autonomous console ready. Load or edit a mission script, then run it.', 'normal');
+      setProgramStatus('Launch complete. Press Run autonomous mission to execute your script.', 'PROGRAM READY');
       showToast('Launch successful. Welcome aboard Kibo.', 'success');
       soundBeep(740, .18);
       updateTelemetry();
@@ -1838,6 +1901,236 @@ function soundBeep(frequency = 520, duration = .08) {
     oscillator.stop(audioContext.currentTime + duration);
   } catch (error) {
     muted = true;
+  }
+}
+
+function updatePlayer(delta) {
+  if (state.autoRunning) {
+    updateAutonomousPlayer(delta);
+    return;
+  }
+  updatePlayerManual(delta);
+}
+
+function parseProgram() {
+  const raw = document.getElementById('programEditor').value;
+  const allowed = new Set(TARGETS.map(target => target.id));
+  const commands = [];
+  const lines = raw.split(/\r?\n/);
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index].trim();
+    if (!line || line.startsWith('#')) continue;
+    const parts = line.split(/\s+/);
+    const command = parts[0].toUpperCase();
+    if (command === 'MOVE_TO' && parts.length === 2 && allowed.has(parts[1].toLowerCase())) {
+      commands.push({ type: 'MOVE_TO', targetId: parts[1].toLowerCase(), line: index + 1 });
+    } else if (command === 'ALIGN' && parts.length === 1) {
+      commands.push({ type: 'ALIGN', line: index + 1 });
+    } else if (command === 'SCAN' && parts.length === 1) {
+      commands.push({ type: 'SCAN', line: index + 1 });
+    } else if (command === 'WAIT' && parts.length === 2 && Number.isFinite(Number(parts[1])) && Number(parts[1]) >= 0 && Number(parts[1]) <= 10) {
+      commands.push({ type: 'WAIT', seconds: Number(parts[1]), line: index + 1 });
+    } else {
+      throw new Error(`Line ${index + 1}: invalid command "${line}".`);
+    }
+  }
+  if (!commands.length) throw new Error('Your program is empty. Add at least one command.');
+  return commands;
+}
+
+function setProgramStatus(message, stateLabel = 'PROGRAM READY') {
+  const status = document.getElementById('programStatus');
+  const label = document.getElementById('programState');
+  if (status) status.textContent = message;
+  if (label) label.textContent = stateLabel;
+}
+
+function runAutonomousProgram() {
+  if (!state.started) {
+    showToast('Begin the launch sequence first.', 'warning');
+    setProgramStatus('Begin the launch sequence, then run your script.', 'AWAITING LAUNCH');
+    return;
+  }
+  if (state.completed) {
+    showToast('Mission is already complete. Restart to run again.', 'warning');
+    return;
+  }
+  try {
+    state.program = parseProgram();
+  } catch (error) {
+    setProgramStatus(error.message, 'PROGRAM ERROR');
+    addLog(error.message, 'alert');
+    showToast(error.message, 'warning', 3500);
+    return;
+  }
+  state.autoRunning = true;
+  state.paused = false;
+  state.programIndex = 0;
+  state.autoPath = [];
+  state.autoCommand = null;
+  state.autoWait = 0;
+  state.autoStall = 0;
+  state.player.vx = 0;
+  state.player.vy = 0;
+  document.body.classList.add('autonomous-mode');
+  setProgramStatus(`Program loaded: ${state.program.length} commands. Robot is executing autonomously.`, 'RUNNING');
+  addLog(`Autonomous program started: ${state.program.length} commands loaded.`, 'success');
+  showToast('Autonomous mission started.', 'success');
+}
+
+function stopAutonomousProgram() {
+  state.autoRunning = false;
+  state.player.vx = 0;
+  state.player.vy = 0;
+  document.body.classList.remove('autonomous-mode');
+  setProgramStatus('Program stopped. Edit the script and run it again when ready.', 'STOPPED');
+  addLog('Autonomous program stopped by operator.', 'warning');
+}
+
+function targetById(id) {
+  return TARGETS.find(target => target.id === id);
+}
+
+function findApproachPoint(target) {
+  const candidates = [];
+  for (let radius = 34; radius <= 78; radius += 11) {
+    for (let angle = 0; angle < Math.PI * 2; angle += Math.PI / 4) {
+      const point = { x: target.x + Math.cos(angle) * radius, y: target.y + Math.sin(angle) * radius };
+      if (canMoveTo(point.x, point.y)) candidates.push(point);
+    }
+    if (candidates.length) break;
+  }
+  candidates.sort((a, b) => distance(state.player, a) - distance(state.player, b));
+  return candidates[0] || { x: target.x + 82, y: target.y };
+}
+
+function buildAutoPath(destination) {
+  const step = 24;
+  const cols = Math.floor(WORLD.width / step) + 1;
+  const rows = Math.floor(WORLD.height / step) + 1;
+  const toCell = point => ({ x: clamp(Math.round(point.x / step), 0, cols - 1), y: clamp(Math.round(point.y / step), 0, rows - 1) });
+  const start = toCell(state.player);
+  const goal = toCell(destination);
+  const key = cell => `${cell.x},${cell.y}`;
+  const queue = [start];
+  const previous = new Map([[key(start), null]]);
+  let found = null;
+  const directions = [{ x: 1, y: 0 }, { x: -1, y: 0 }, { x: 0, y: 1 }, { x: 0, y: -1 }, { x: 1, y: 1 }, { x: -1, y: 1 }, { x: 1, y: -1 }, { x: -1, y: -1 }];
+  for (let head = 0; head < queue.length && head < 6000; head += 1) {
+    const cell = queue[head];
+    if (Math.hypot(cell.x - goal.x, cell.y - goal.y) <= 1.5) { found = cell; break; }
+    for (const direction of directions) {
+      const next = { x: cell.x + direction.x, y: cell.y + direction.y };
+      if (next.x < 3 || next.y < 3 || next.x > cols - 4 || next.y > rows - 4) continue;
+      const nextKey = key(next);
+      if (previous.has(nextKey)) continue;
+      if (!canMoveTo(next.x * step, next.y * step)) continue;
+      if (direction.x && direction.y && (!canMoveTo((cell.x + direction.x) * step, cell.y * step) || !canMoveTo(cell.x * step, (cell.y + direction.y) * step))) continue;
+      previous.set(nextKey, key(cell));
+      queue.push(next);
+    }
+  }
+  if (!found) return [destination];
+  const path = [];
+  let cursor = key(found);
+  while (cursor) {
+    const parts = cursor.split(',').map(Number);
+    path.push({ x: parts[0] * step, y: parts[1] * step });
+    cursor = previous.get(cursor);
+  }
+  path.reverse();
+  path.push(destination);
+  return path;
+}
+
+function moveAutonomouslyToward(destination, delta) {
+  const player = state.player;
+  if (!state.autoPath.length) state.autoPath = buildAutoPath(destination);
+  while (state.autoPath.length && distance(player, state.autoPath[0]) < 18) state.autoPath.shift();
+  const waypoint = state.autoPath[0] || destination;
+  const dx = waypoint.x - player.x;
+  const dy = waypoint.y - player.y;
+  const desired = Math.atan2(dy, dx);
+  const turn = angleDifference(desired, player.angle);
+  player.angle = normalizeAngle(player.angle + clamp(turn, -CONFIG.rotationSpeed * delta, CONFIG.rotationSpeed * delta));
+  const remaining = Math.hypot(dx, dy);
+  const speed = Math.min(105, Math.max(0, remaining * 2.0));
+  const alignmentFactor = Math.max(.25, Math.cos(Math.min(Math.PI / 2, Math.abs(turn))));
+  const travel = Math.min(remaining, speed * alignmentFactor * delta);
+  const nextX = player.x + (dx / Math.max(1, remaining)) * travel;
+  const nextY = player.y + (dy / Math.max(1, remaining)) * travel;
+  if (canMoveTo(nextX, player.y)) player.x = nextX;
+  if (canMoveTo(player.x, nextY)) player.y = nextY;
+  player.vx = (player.x - player.lastX) / Math.max(delta, .001);
+  player.vy = (player.y - player.lastY) / Math.max(delta, .001);
+  if (Math.hypot(player.x - player.lastX, player.y - player.lastY) > 3) {
+    player.trail.push({ x: player.lastX, y: player.lastY });
+    if (player.trail.length > 12) player.trail.shift();
+  }
+  player.lastX = player.x;
+  player.lastY = player.y;
+  if (Math.hypot(player.x - state.autoLastPosition.x, player.y - state.autoLastPosition.y) < .7) state.autoStall += delta;
+  else state.autoStall = 0;
+  state.autoLastPosition = { x: player.x, y: player.y };
+  if (state.autoStall > 2.2) {
+    state.autoPath = [];
+    state.autoStall = 0;
+    if (distance(player, destination) > CONFIG.scanRadius) {
+      const target = currentTarget();
+      if (target) addLog(`Autopilot recalculating route near ${target.short}.`, 'warning');
+    }
+  }
+  state.battery = Math.max(0, state.battery - .003 * delta * Math.hypot(player.vx, player.vy));
+}
+
+function updateAutonomousPlayer(delta) {
+  if (!state.autoRunning || state.paused || state.completed) return;
+  state.scanAnimation = Math.max(0, state.scanAnimation - delta);
+  state.scanPulse += delta;
+  if (state.autoWait > 0) { state.autoWait -= delta; return; }
+  if (state.programIndex >= state.program.length) {
+    state.autoRunning = false;
+    document.body.classList.remove('autonomous-mode');
+    if (!state.completed) {
+      setProgramStatus('Program ended before all checkpoints were completed. Check the command sequence.', 'PROGRAM ENDED');
+      addLog('Program ended before the mission route was complete.', 'alert');
+    }
+    return;
+  }
+  const command = state.program[state.programIndex];
+  state.autoCommand = command;
+  setProgramStatus(`Executing line ${command.line}: ${command.type}${command.targetId ? ' ' + command.targetId : ''}`, 'RUNNING');
+  if (command.type === 'MOVE_TO') {
+    const target = targetById(command.targetId);
+    if (!target) { state.programIndex += 1; return; }
+    const destination = findApproachPoint(target);
+    if (distance(state.player, destination) < 19 || distance(state.player, target) <= CONFIG.scanRadius) {
+      state.player.vx = 0; state.player.vy = 0; state.autoPath = [];
+      state.programIndex += 1;
+      addLog(`Autonomous navigation reached approach zone for ${target.short}.`, 'success');
+    } else moveAutonomouslyToward(destination, delta);
+  } else if (command.type === 'ALIGN') {
+    const target = currentTarget() || targetById(state.program.find(item => item.type === 'MOVE_TO' && item.line > command.line)?.targetId || 'goal');
+    if (!target) { state.programIndex += 1; return; }
+    const difference = angleDifference(target.heading, state.player.angle);
+    state.player.angle = normalizeAngle(state.player.angle + clamp(difference, -CONFIG.rotationSpeed * delta, CONFIG.rotationSpeed * delta));
+    state.player.vx *= .2; state.player.vy *= .2;
+    if (Math.abs(difference) < .045) { state.player.angle = target.heading; state.programIndex += 1; addLog(`Camera attitude aligned for ${target.short}.`, 'success'); }
+  } else if (command.type === 'SCAN') {
+    state.player.vx *= .1; state.player.vy *= .1;
+    const target = currentTarget();
+    if (!target) { state.programIndex += 1; return; }
+    if (distance(state.player, target) <= CONFIG.scanRadius && currentAlignment(target) < 35) {
+      const before = state.targetIndex;
+      scanTarget();
+      if (state.targetIndex > before || state.completed) { state.programIndex += 1; state.autoPath = []; }
+    } else {
+      const destination = findApproachPoint(target);
+      moveAutonomouslyToward(destination, delta);
+    }
+  } else if (command.type === 'WAIT') {
+    state.autoWait = command.seconds;
+    state.programIndex += 1;
   }
 }
 
@@ -1937,6 +2230,9 @@ function bindEvents() {
   });
   window.addEventListener('resize', resizeCanvas);
   UI.launchButton.addEventListener('click', beginLaunch);
+  document.getElementById('runProgramButton').addEventListener('click', runAutonomousProgram);
+  document.getElementById('stopProgramButton').addEventListener('click', stopAutonomousProgram);
+  document.getElementById('sampleProgramButton').addEventListener('click', () => { document.getElementById('programEditor').value = 'MOVE_TO dock\nALIGN\nSCAN\nMOVE_TO joint-a\nALIGN\nSCAN\nMOVE_TO hatch\nALIGN\nSCAN\nMOVE_TO rack\nALIGN\nSCAN\nMOVE_TO joint-b\nALIGN\nSCAN\nMOVE_TO goal\nALIGN\nSCAN'; setProgramStatus('Sample route restored. Run it after launch.', 'PROGRAM READY'); });
   UI.targetButton.addEventListener('click', scanTarget);
   document.getElementById('helpButton').addEventListener('click', showHelp);
   document.getElementById('routeButton').addEventListener('click', showRouteBriefing);
