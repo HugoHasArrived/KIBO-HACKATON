@@ -1,2598 +1,2005 @@
-import os
-import math
-import json
-import time
-import secrets
-from flask import Flask, jsonify, render_template_string, request, session
+from flask import Flask, Response, jsonify
+from datetime import datetime, timezone
 
 app = Flask(__name__)
-app.secret_key = os.environ.get("SECRET_KEY", "kibo-mission-trainer-local-dev-key-change-me")
-app.config.update(SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Lax")
+app.config["JSON_SORT_KEYS"] = False
 
 PAGE = r"""<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<meta name="theme-color" content="#070b18">
-<title>KIBO | Int-Ball2 Checkpoint Training</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#07111f">
+<title>KIBO Mission Trainer</title>
 <style>
-:root{color-scheme:dark;--bg:#060914;--panel:#10182b;--panel2:#0b1222;--line:#263650;--text:#edf5ff;--muted:#93a7c5;--cyan:#60e7ff;--blue:#6c8dff;--green:#70f0bd;--amber:#ffd479;--red:#ff6f83;--violet:#b39aff;--radius:16px;--shadow:0 20px 55px #0007}
-*{box-sizing:border-box}html,body{margin:0;min-height:100%;background:var(--bg);color:var(--text);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}body{overflow-x:hidden}button,input{font:inherit}button{cursor:pointer;color:var(--text);border:1px solid #344762;background:#17243a;border-radius:10px;padding:10px 13px;transition:transform .12s,border-color .12s,background .12s}button:hover{border-color:var(--cyan);background:#20334e}button:active{transform:translateY(1px)}button:focus-visible{outline:2px solid var(--cyan);outline-offset:3px}.primary{background:linear-gradient(135deg,#48cce9,#657aff);border:0;color:#06101c;font-weight:900}.danger{border-color:#744252;background:#351d2b}.subtle{background:#0b1425}.eyebrow{font-size:.7rem;font-weight:900;letter-spacing:.2em;color:var(--cyan);text-transform:uppercase}.muted{color:var(--muted)}.small{font-size:.78rem}.mono{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-variant-numeric:tabular-nums}.app-shell{max-width:1600px;margin:auto;padding:18px}.topbar{display:flex;align-items:center;justify-content:space-between;gap:18px;margin-bottom:16px}.brand{display:flex;align-items:center;gap:12px}.brand-mark{width:44px;height:44px;border-radius:13px;background:linear-gradient(145deg,#7af0ff,#7b87ff);display:grid;place-items:center;color:#07101e;font-size:1.4rem;font-weight:1000;box-shadow:0 0 35px #5be6ff2b}.brand h1{font-size:1.05rem;letter-spacing:.1em;margin:0}.brand p{margin:4px 0 0;color:var(--muted);font-size:.75rem}.top-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.pill{border:1px solid var(--line);border-radius:999px;padding:7px 10px;color:var(--muted);font-size:.72rem;display:flex;align-items:center;gap:7px}.dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 12px var(--green)}.layout{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:16px;align-items:start}.main-column{min-width:0}.panel{background:linear-gradient(160deg,#111a2d,#0b1120);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden}.panel-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 16px;border-bottom:1px solid #24334a}.panel-head h2{margin:0;font-size:.78rem;letter-spacing:.13em;text-transform:uppercase}.panel-head span{color:var(--muted);font-size:.7rem}.viewport{position:relative;min-height:480px;aspect-ratio:16/9;background:#040815;overflow:hidden}.viewport canvas{position:absolute;inset:0;width:100%;height:100%;display:block}.canvas-overlay{position:absolute;inset:0;pointer-events:none;display:flex;flex-direction:column;justify-content:space-between;padding:15px}.hud-row{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}.hud-chip{background:#07101dcc;border:1px solid #3b536e;border-radius:9px;padding:8px 10px;backdrop-filter:blur(8px);font-size:.72rem;color:#dbeeff}.hud-chip strong{display:block;font-size:.83rem;color:var(--cyan);margin-top:3px}.crosshair{position:absolute;left:50%;top:50%;width:28px;height:28px;transform:translate(-50%,-50%);opacity:.7}.crosshair:before,.crosshair:after{content:"";position:absolute;background:#8df2ff}.crosshair:before{left:13px;top:0;width:1px;height:28px}.crosshair:after{top:13px;left:0;height:1px;width:28px}.scan-reticle{position:absolute;width:150px;height:150px;left:50%;top:50%;transform:translate(-50%,-50%);border:1px solid #65eaff66;border-radius:50%;display:none}.scan-reticle:before,.scan-reticle:after{content:"";position:absolute;inset:13px;border:1px dashed #65eaff55;border-radius:50%}.scan-reticle:after{inset:34px}.viewport.scanning .scan-reticle{display:block;animation:rotate 8s linear infinite}.viewport.scanning .crosshair{opacity:0}@keyframes rotate{to{transform:translate(-50%,-50%) rotate(360deg)}}.status-strip{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);border-top:1px solid var(--line)}.status-cell{background:#0c1424;padding:12px 14px;min-width:0}.status-label{font-size:.65rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase}.status-value{display:flex;justify-content:space-between;gap:8px;align-items:baseline;margin:5px 0 8px;font-size:.98rem;font-weight:800}.bar{height:5px;background:#25354b;border-radius:10px;overflow:hidden}.bar span{display:block;height:100%;border-radius:10px;background:linear-gradient(90deg,#4dcde8,#8b9aff);width:100%;transition:width .25s}.bar.green span{background:linear-gradient(90deg,#47d6a4,#a4ffd8)}.bar.amber span{background:linear-gradient(90deg,#f7a95e,#ffe28c)}.bar.red span{background:linear-gradient(90deg,#ff667c,#ffad98)}.below-grid{display:grid;grid-template-columns:1.15fr .85fr;gap:16px;margin-top:16px}.controls-body{padding:15px}.control-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;max-width:340px;margin:8px auto 13px}.control-grid button{min-height:46px;font-weight:800}.control-grid .blank{visibility:hidden}.control-caption{text-align:center;color:var(--muted);font-size:.72rem;margin-bottom:12px}.action-row{display:flex;gap:8px;flex-wrap:wrap}.action-row button{flex:1;min-width:100px}.key{font-family:ui-monospace,monospace;background:#050a14;border:1px solid #34445d;border-radius:5px;padding:2px 5px;font-size:.72rem}.objective-list{padding:8px 14px 13px}.objective{display:grid;grid-template-columns:24px minmax(0,1fr) auto;gap:10px;align-items:start;padding:11px 0;border-bottom:1px solid #1d2b40}.objective:last-child{border-bottom:0}.objective-mark{width:22px;height:22px;border:1px solid #40536b;border-radius:7px;display:grid;place-items:center;color:var(--muted);font-size:.75rem}.objective.done .objective-mark{background:#1a4b40;border-color:#3b9c7d;color:#a5ffdf}.objective.active .objective-mark{border-color:var(--cyan);color:var(--cyan);box-shadow:0 0 16px #60e7ff18}.objective-title{font-size:.81rem;font-weight:750}.objective-desc{font-size:.7rem;color:var(--muted);line-height:1.5;margin-top:4px}.objective-state{font-size:.61rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);white-space:nowrap}.objective.active .objective-state{color:var(--cyan)}.objective.done .objective-state{color:var(--green)}.side-stack{display:grid;gap:16px}.side-panel{padding:14px}.side-title{font-size:.72rem;text-transform:uppercase;letter-spacing:.13em;margin:0 0 12px}.telemetry-list{display:grid;gap:10px}.telemetry-row{display:flex;justify-content:space-between;gap:10px;font-size:.76rem}.telemetry-row span:first-child{color:var(--muted)}.telemetry-row strong{font-weight:800}.mini-map{height:180px;border:1px solid #273952;border-radius:12px;overflow:hidden;background:#050b17;position:relative}.mini-map canvas{width:100%;height:100%;display:block}.map-legend{display:flex;justify-content:space-between;gap:8px;color:var(--muted);font-size:.67rem;margin-top:8px}.legend-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--cyan);margin-right:5px}.legend-dot.gold{background:var(--amber)}.log{max-height:190px;overflow:auto;display:grid;gap:8px}.log-entry{font-size:.72rem;line-height:1.45;border-left:2px solid #40526b;padding:2px 0 2px 9px;color:#c4d2e8}.log-entry.good{border-color:var(--green)}.log-entry.warn{border-color:var(--amber)}.log-entry time{display:block;color:#7488a6;font-size:.63rem;margin-bottom:2px}.footer-note{text-align:center;color:#657793;font-size:.68rem;padding:20px 8px 5px}.modal-backdrop{position:fixed;inset:0;background:#02040bdc;backdrop-filter:blur(9px);z-index:20;display:none;align-items:center;justify-content:center;padding:18px}.modal-backdrop.show{display:flex}.modal{width:min(720px,100%);max-height:90vh;overflow:auto;border:1px solid #3a526f;border-radius:22px;background:linear-gradient(145deg,#121e34,#070c18);box-shadow:0 30px 100px #000c;padding:clamp(20px,4vw,38px)}.modal h2{font-size:clamp(1.8rem,4vw,3.3rem);line-height:1.03;letter-spacing:-.04em;margin:10px 0 13px}.modal p{color:#a7bad6;line-height:1.7}.modal-actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:22px}.modal-actions button{min-width:125px}.modal-kicker{font-size:.7rem;letter-spacing:.22em;color:var(--cyan);font-weight:900}.mission-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin:18px 0}.stat-card{border:1px solid #2b3d57;background:#0a1323;border-radius:12px;padding:13px}.stat-card span{display:block;color:var(--muted);font-size:.7rem}.stat-card strong{display:block;margin-top:7px;font-size:1.15rem}.toast{position:fixed;left:50%;bottom:22px;transform:translate(-50%,20px);opacity:0;pointer-events:none;z-index:30;background:#14253b;border:1px solid #4a6684;border-radius:12px;padding:12px 16px;max-width:min(92vw,520px);font-size:.82rem;box-shadow:var(--shadow);transition:.2s}.toast.show{opacity:1;transform:translate(-50%,0)}.launch-count{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-size:clamp(4rem,15vw,9rem);font-weight:1000;color:#f0fbff;text-shadow:0 0 45px #58eaffaa;z-index:3;display:none}.launch-count.show{display:block}.mobile-hint{display:none}.disabled{opacity:.45;pointer-events:none}.hidden{display:none!important}
-@media(max-width:1050px){.layout{grid-template-columns:minmax(0,1fr) 285px}.below-grid{grid-template-columns:1fr}.viewport{min-height:390px}}
-@media(max-width:760px){.app-shell{padding:10px}.topbar{align-items:flex-start}.brand h1{font-size:.9rem}.brand p{font-size:.67rem}.brand-mark{width:38px;height:38px}.top-actions .pill{display:none}.layout{grid-template-columns:1fr}.side-stack{grid-template-columns:1fr 1fr}.side-stack .panel:last-child{grid-column:1/-1}.viewport{min-height:300px;aspect-ratio:4/3}.status-strip{grid-template-columns:repeat(2,1fr)}.status-cell{padding:10px}.below-grid{gap:10px;margin-top:10px}.side-stack{gap:10px}.panel-head{padding:11px 12px}.hud-chip{font-size:.64rem;padding:7px}.mobile-hint{display:block;color:var(--muted);font-size:.69rem;margin-top:9px}.mission-stats{grid-template-columns:1fr 1fr}.mission-stats .stat-card:last-child{grid-column:1/-1}}
-@media(max-width:430px){.topbar{gap:8px}.top-actions{gap:5px}.top-actions button{font-size:.72rem;padding:8px}.brand{gap:8px}.brand h1{font-size:.76rem;letter-spacing:.06em}.brand p{font-size:.6rem}.side-stack{grid-template-columns:1fr}.side-stack .panel:last-child{grid-column:auto}.viewport{min-height:255px}.canvas-overlay{padding:8px}.hud-chip{font-size:.58rem}.hud-chip strong{font-size:.7rem}.action-row button{min-width:85px;padding:9px 6px;font-size:.74rem}.control-grid button{min-height:42px}.modal-actions button{flex:1}}
+:root {
+  color-scheme: dark;
+  --bg: #050a13;
+  --panel: rgba(10, 22, 38, .94);
+  --panel-soft: rgba(15, 33, 52, .88);
+  --line: rgba(103, 188, 224, .24);
+  --cyan: #63e6ff;
+  --blue: #368fff;
+  --green: #82ffc1;
+  --amber: #ffcb72;
+  --red: #ff6f83;
+  --text: #eaf7ff;
+  --muted: #91a9bf;
+  --shadow: 0 18px 60px rgba(0, 0, 0, .38);
+  --radius: 16px;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+* { box-sizing: border-box; }
+html { min-height: 100%; background: var(--bg); }
+body {
+  margin: 0;
+  min-height: 100vh;
+  color: var(--text);
+  font-family: var(--sans);
+  background: radial-gradient(ellipse at 50% -10%, #163a59 0%, #091626 42%, #050a13 80%);
+  overflow-x: hidden;
+}
+button, input { font: inherit; }
+button { cursor: pointer; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--cyan); outline-offset: 3px; }
+button:disabled { cursor: not-allowed; opacity: .45; }
+.app-shell { width: min(1500px, 100%); margin: 0 auto; padding: 18px; }
+.topbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
+.brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.brand-mark { width: 48px; height: 48px; border: 1px solid rgba(99,230,255,.55); border-radius: 14px; display: grid; place-items: center; background: linear-gradient(145deg, #163d59, #091525); box-shadow: 0 0 28px rgba(54,143,255,.16); }
+.brand-mark svg { width: 29px; height: 29px; }
+.brand-copy { min-width: 0; }
+.brand-title { margin: 0; font-size: clamp(17px, 2.4vw, 24px); letter-spacing: .11em; font-weight: 900; }
+.brand-subtitle { color: var(--muted); font-size: 11px; letter-spacing: .18em; text-transform: uppercase; margin-top: 4px; }
+.top-status { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.status-pill { display: inline-flex; align-items: center; gap: 7px; border: 1px solid var(--line); border-radius: 999px; padding: 8px 11px; color: #b7d2e6; background: rgba(8,18,31,.7); font-size: 11px; letter-spacing: .06em; white-space: nowrap; }
+.status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 10px var(--green); }
+.layout { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 16px; align-items: start; }
+.main-column { min-width: 0; }
+.stage-frame { position: relative; overflow: hidden; border: 1px solid rgba(99,230,255,.3); border-radius: 20px; background: #06101b; box-shadow: var(--shadow); min-height: 520px; }
+#gameCanvas { display: block; width: 100%; height: min(70vh, 720px); min-height: 520px; outline: none; image-rendering: auto; touch-action: none; }
+.stage-vignette { pointer-events: none; position: absolute; inset: 0; background: radial-gradient(ellipse at center, transparent 45%, rgba(0,0,0,.25) 100%); }
+.stage-topline { position: absolute; top: 15px; left: 16px; right: 16px; display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; pointer-events: none; }
+.stage-label { padding: 10px 12px; background: rgba(4,13,23,.8); border: 1px solid rgba(99,230,255,.25); border-radius: 11px; backdrop-filter: blur(12px); }
+.eyebrow { color: var(--cyan); font-size: 9px; font-weight: 800; letter-spacing: .19em; text-transform: uppercase; }
+.stage-location { margin-top: 4px; font-weight: 800; font-size: 13px; }
+.stage-coordinates { margin-top: 4px; font-family: var(--mono); color: var(--muted); font-size: 10px; }
+.stage-alert { max-width: 250px; text-align: right; color: var(--amber); font-size: 10px; line-height: 1.45; text-shadow: 0 2px 8px #000; }
+.center-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 20px; background: rgba(2,7,14,.62); backdrop-filter: blur(8px); z-index: 5; }
+.launch-card { width: min(560px, 100%); padding: clamp(22px, 4vw, 42px); text-align: center; border: 1px solid rgba(99,230,255,.42); border-radius: 22px; background: linear-gradient(150deg, rgba(12,32,52,.98), rgba(4,12,23,.98)); box-shadow: 0 25px 100px rgba(0,0,0,.55), 0 0 55px rgba(54,143,255,.12); }
+.launch-symbol { width: 78px; height: 78px; margin: 0 auto 20px; border: 1px solid rgba(99,230,255,.6); border-radius: 50%; display: grid; place-items: center; color: var(--cyan); box-shadow: 0 0 38px rgba(99,230,255,.12), inset 0 0 22px rgba(99,230,255,.08); }
+.launch-symbol svg { width: 48px; height: 48px; }
+.launch-title { font-size: clamp(25px, 4.2vw, 42px); letter-spacing: .06em; line-height: 1.05; font-weight: 950; margin: 0; }
+.launch-title span { color: var(--cyan); }
+.launch-description { color: #a9bfd2; line-height: 1.65; max-width: 440px; margin: 16px auto 22px; font-size: 13px; }
+.launch-note { padding: 12px; margin: 0 0 20px; border-radius: 10px; background: rgba(255,203,114,.08); border: 1px solid rgba(255,203,114,.2); color: #e8cb99; font-size: 11px; line-height: 1.5; text-align: left; }
+.primary-button { border: 0; border-radius: 11px; padding: 13px 20px; min-height: 46px; color: #03111b; font-weight: 900; letter-spacing: .07em; text-transform: uppercase; background: linear-gradient(105deg, #7af0ff, #64b7ff); box-shadow: 0 8px 24px rgba(54,143,255,.2); transition: transform .16s ease, filter .16s ease; }
+.primary-button:hover { transform: translateY(-2px); filter: brightness(1.08); }
+.primary-button:active { transform: translateY(0); }
+.secondary-button { border: 1px solid var(--line); border-radius: 10px; padding: 10px 13px; color: #c9e3f5; background: rgba(10,25,41,.8); transition: border-color .15s ease, background .15s ease; }
+.secondary-button:hover { border-color: rgba(99,230,255,.7); background: rgba(18,43,64,.9); }
+.launch-button { width: 100%; font-size: 12px; }
+.launch-foot { color: #708ca4; margin-top: 14px; font-size: 10px; letter-spacing: .07em; }
+.launch-count { font-family: var(--mono); color: var(--cyan); font-size: 54px; font-weight: 900; margin: 18px 0; text-shadow: 0 0 30px rgba(99,230,255,.35); }
+.launch-progress { height: 5px; background: #122a3c; border-radius: 20px; overflow: hidden; margin-top: 20px; }
+.launch-progress-fill { width: 0%; height: 100%; background: linear-gradient(90deg, var(--blue), var(--cyan)); transition: width .12s linear; }
+.hud-bottom { position: absolute; bottom: 14px; left: 14px; right: 14px; display: flex; align-items: end; justify-content: space-between; gap: 10px; pointer-events: none; }
+.hud-readout { padding: 10px 12px; border: 1px solid rgba(99,230,255,.2); border-radius: 10px; background: rgba(4,13,23,.78); backdrop-filter: blur(10px); min-width: 110px; }
+.readout-label { font-size: 9px; color: var(--muted); letter-spacing: .13em; text-transform: uppercase; }
+.readout-value { margin-top: 5px; font-family: var(--mono); font-weight: 800; font-size: 15px; }
+.hud-readouts { display: flex; gap: 8px; }
+.scan-indicator { color: var(--green); font-size: 10px; letter-spacing: .13em; text-transform: uppercase; padding: 9px 11px; border-radius: 9px; background: rgba(2,16,13,.8); border: 1px solid rgba(130,255,193,.28); }
+.control-strip { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-top: 12px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 13px; background: rgba(8,19,32,.76); }
+.control-group { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; }
+.keycap { display: inline-grid; place-items: center; min-width: 25px; height: 25px; padding: 0 6px; color: #d8f3ff; font-family: var(--mono); font-size: 10px; border: 1px solid #36536a; border-bottom-width: 3px; border-radius: 6px; background: linear-gradient(#142b40, #0a1727); }
+.control-label { color: var(--muted); font-size: 10px; }
+.side-column { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.panel { overflow: hidden; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); box-shadow: 0 8px 28px rgba(0,0,0,.16); }
+.panel-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 15px 16px; border-bottom: 1px solid rgba(103,188,224,.14); }
+.panel-title { margin: 0; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; font-weight: 900; }
+.panel-kicker { color: var(--muted); font-size: 9px; letter-spacing: .12em; text-transform: uppercase; }
+.panel-body { padding: 14px 16px; }
+.mission-progress { height: 5px; overflow: hidden; border-radius: 99px; background: #172b3c; margin: 8px 0 14px; }
+.mission-progress-fill { width: 0; height: 100%; background: linear-gradient(90deg, #398fff, #72f4ff); transition: width .25s ease; }
+.objective-list { display: flex; flex-direction: column; gap: 8px; }
+.objective-item { display: grid; grid-template-columns: 27px minmax(0,1fr) auto; align-items: center; gap: 9px; padding: 10px; border: 1px solid rgba(103,188,224,.12); border-radius: 10px; background: rgba(14,31,48,.58); transition: border-color .18s ease, background .18s ease; }
+.objective-item.active { border-color: rgba(99,230,255,.55); background: rgba(22,56,76,.6); }
+.objective-item.complete { border-color: rgba(130,255,193,.24); background: rgba(19,55,46,.3); }
+.objective-icon { display: grid; place-items: center; width: 27px; height: 27px; border-radius: 8px; color: #9eb9cf; background: #172d41; font-size: 11px; font-weight: 900; }
+.objective-item.active .objective-icon { color: #03131d; background: var(--cyan); }
+.objective-item.complete .objective-icon { color: #06251a; background: var(--green); }
+.objective-name { font-size: 11px; line-height: 1.35; font-weight: 800; }
+.objective-hint { color: var(--muted); margin-top: 4px; font-size: 9px; line-height: 1.4; }
+.objective-state { color: var(--muted); font-size: 8px; text-transform: uppercase; letter-spacing: .08em; white-space: nowrap; }
+.objective-item.complete .objective-state { color: var(--green); }
+.objective-item.active .objective-state { color: var(--cyan); }
+.stat-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 8px; }
+.stat-card { padding: 11px; border-radius: 10px; background: rgba(18,38,57,.72); border: 1px solid rgba(103,188,224,.12); }
+.stat-label { color: var(--muted); font-size: 9px; text-transform: uppercase; letter-spacing: .11em; }
+.stat-value { margin-top: 6px; font-family: var(--mono); font-size: 19px; font-weight: 900; }
+.stat-unit { color: #7694aa; font-size: 9px; margin-left: 4px; }
+.telemetry-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 0; border-bottom: 1px solid rgba(103,188,224,.1); font-size: 10px; }
+.telemetry-row:last-child { border-bottom: 0; }
+.telemetry-key { color: var(--muted); }
+.telemetry-value { font-family: var(--mono); color: #dff7ff; text-align: right; }
+.battery-track { width: 76px; height: 7px; border: 1px solid #33566a; padding: 1px; border-radius: 4px; margin-left: auto; }
+.battery-fill { width: 100%; height: 100%; border-radius: 2px; background: var(--green); transition: width .2s ease; }
+.battery-wrap { display: flex; align-items: center; gap: 8px; }
+.mission-log { display: flex; flex-direction: column; gap: 8px; max-height: 190px; overflow-y: auto; padding-right: 3px; }
+.log-entry { display: grid; grid-template-columns: 52px minmax(0,1fr); gap: 8px; font-size: 10px; line-height: 1.5; }
+.log-time { color: #6489a4; font-family: var(--mono); }
+.log-message { color: #bfd3e2; }
+.log-entry.success .log-message { color: var(--green); }
+.log-entry.warning .log-message { color: var(--amber); }
+.log-entry.alert .log-message { color: var(--red); }
+.route-preview { width: 100%; height: 120px; display: block; border-radius: 10px; background: #071421; border: 1px solid rgba(103,188,224,.16); }
+.route-legend { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 9px; }
+.legend-item { display: flex; align-items: center; gap: 5px; color: var(--muted); font-size: 9px; }
+.legend-dot { width: 7px; height: 7px; border-radius: 50%; }
+.panel-actions { display: flex; flex-wrap: wrap; gap: 7px; }
+.panel-actions button { flex: 1; min-width: 88px; font-size: 10px; }
+.footer-note { color: #607b91; text-align: center; font-size: 10px; line-height: 1.6; padding: 18px 10px 4px; }
+.modal-backdrop { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; padding: 18px; background: rgba(1,5,10,.78); backdrop-filter: blur(8px); z-index: 20; }
+.modal-backdrop.visible { display: flex; }
+.modal-card { width: min(560px,100%); max-height: min(85vh,760px); overflow-y: auto; border: 1px solid rgba(99,230,255,.35); border-radius: 18px; background: #091725; box-shadow: 0 25px 90px #000; }
+.modal-heading { padding: 18px 20px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.modal-heading h2 { margin: 0; font-size: 14px; letter-spacing: .12em; text-transform: uppercase; }
+.modal-content { padding: 20px; color: #bdd0df; font-size: 12px; line-height: 1.7; }
+.modal-content h3 { color: var(--cyan); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; margin: 18px 0 6px; }
+.modal-content h3:first-child { margin-top: 0; }
+.modal-content ul { padding-left: 20px; }
+.modal-content li { margin: 5px 0; }
+.modal-footer { padding: 0 20px 20px; display: flex; justify-content: flex-end; gap: 8px; }
+.result-score { font-size: 48px; color: var(--cyan); font-weight: 950; font-family: var(--mono); text-align: center; margin: 10px 0; }
+.result-caption { text-align: center; color: var(--muted); font-size: 10px; letter-spacing: .15em; text-transform: uppercase; }
+.result-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; margin-top: 20px; }
+.result-item { padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: rgba(15,33,52,.7); }
+.result-item span { display: block; color: var(--muted); font-size: 9px; text-transform: uppercase; letter-spacing: .1em; }
+.result-item strong { display: block; margin-top: 7px; font-family: var(--mono); font-size: 17px; }
+.toast-stack { position: fixed; right: 18px; bottom: 18px; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; z-index: 30; pointer-events: none; }
+.toast { max-width: min(360px,calc(100vw - 36px)); padding: 12px 15px; border: 1px solid rgba(99,230,255,.4); border-radius: 11px; background: rgba(7,20,33,.97); box-shadow: 0 10px 35px #0008; color: #dff8ff; font-size: 11px; line-height: 1.5; animation: toast-in .22s ease-out; }
+.toast.success { border-color: rgba(130,255,193,.45); }
+.toast.warning { border-color: rgba(255,203,114,.45); }
+@keyframes toast-in { from { transform: translateY(8px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+@keyframes pulse { 0%,100% { opacity: .5; } 50% { opacity: 1; } }
+@keyframes orbit { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+@keyframes scanline { 0% { transform: translateY(-100%); } 100% { transform: translateY(700%); } }
+.mobile-controls { display: none; grid-template-columns: repeat(3,54px); grid-template-rows: repeat(2,48px); gap: 5px; justify-content: center; padding: 10px; }
+.mobile-controls button { border: 1px solid #34536a; border-radius: 10px; color: #dff8ff; background: rgba(13,34,52,.92); font-weight: 900; touch-action: none; user-select: none; }
+.mobile-controls .empty { visibility: hidden; }
+.mobile-actions { display: none; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 7px; padding: 0 12px 12px; }
+.mobile-actions button { min-height: 43px; }
+.help-tip { color: #91a9bf; font-size: 10px; line-height: 1.55; margin-top: 10px; }
+.meter { height: 4px; border-radius: 99px; background: #1a3347; overflow: hidden; }
+.meter-fill { height: 100%; width: 50%; background: var(--cyan); transition: width .2s ease; }
+.target-banner { display: none; margin-top: 12px; padding: 12px 14px; border: 1px solid rgba(99,230,255,.34); border-radius: 12px; background: rgba(13,39,56,.85); }
+.target-banner.visible { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.target-banner strong { display: block; font-size: 11px; }
+.target-banner span { display: block; margin-top: 4px; color: var(--muted); font-size: 10px; }
+.target-banner button { white-space: nowrap; }
+button:active { filter: brightness(.93); }
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: #091523; }
+::-webkit-scrollbar-thumb { background: #24465e; border-radius: 9px; }
+@media (max-width: 1080px) {
+  .layout { grid-template-columns: minmax(0,1fr) 290px; }
+  .app-shell { padding: 12px; }
+  .stage-frame { min-height: 480px; }
+  #gameCanvas { min-height: 480px; }
+}
+@media (max-width: 820px) {
+  .layout { grid-template-columns: 1fr; }
+  .side-column { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); align-items: start; }
+  .side-column .panel:first-child { grid-column: 1 / -1; }
+  .stage-frame { min-height: 430px; }
+  #gameCanvas { height: 58vh; min-height: 430px; }
+  .mobile-controls { display: grid; }
+  .mobile-actions { display: grid; }
+  .control-strip { display: none; }
+}
+@media (max-width: 560px) {
+  .app-shell { padding: 9px; }
+  .topbar { align-items: flex-start; }
+  .brand-mark { width: 40px; height: 40px; }
+  .brand-subtitle { font-size: 8px; letter-spacing: .12em; }
+  .top-status .status-pill:nth-child(2) { display: none; }
+  .status-pill { font-size: 9px; padding: 7px 8px; }
+  .stage-frame { min-height: 410px; border-radius: 15px; }
+  #gameCanvas { min-height: 410px; height: 55vh; }
+  .stage-topline { top: 9px; left: 9px; right: 9px; }
+  .stage-label { padding: 8px 9px; }
+  .stage-location { font-size: 11px; }
+  .stage-alert { max-width: 135px; font-size: 9px; }
+  .hud-bottom { bottom: 9px; left: 9px; right: 9px; }
+  .hud-readout { min-width: 0; padding: 8px; }
+  .readout-value { font-size: 12px; }
+  .hud-readouts { gap: 5px; }
+  .scan-indicator { font-size: 8px; padding: 8px; }
+  .side-column { grid-template-columns: 1fr; }
+  .side-column .panel:first-child { grid-column: auto; }
+  .panel-header { padding: 13px; }
+  .panel-body { padding: 12px; }
+  .launch-card { padding: 22px 18px; }
+  .launch-description { font-size: 12px; }
+  .launch-symbol { width: 62px; height: 62px; margin-bottom: 16px; }
+  .launch-symbol svg { width: 38px; height: 38px; }
+}
 
-.u-gap-1{gap:1px}
-.u-gap-2{gap:2px}
-.u-gap-3{gap:3px}
-.u-gap-4{gap:4px}
-.u-gap-5{gap:5px}
-.u-gap-6{gap:6px}
-.u-gap-7{gap:7px}
-.u-gap-8{gap:8px}
-.u-gap-9{gap:9px}
-.u-gap-10{gap:10px}
-.u-gap-11{gap:11px}
-.u-gap-12{gap:12px}
-.u-gap-13{gap:13px}
-.u-gap-14{gap:14px}
-.u-gap-15{gap:15px}
-.u-gap-16{gap:16px}
-.u-gap-17{gap:17px}
-.u-gap-18{gap:18px}
-.u-gap-19{gap:19px}
-.u-gap-20{gap:20px}
-.u-gap-21{gap:21px}
-.u-gap-22{gap:22px}
-.u-gap-23{gap:23px}
-.u-gap-24{gap:24px}
-.u-gap-25{gap:25px}
-.u-gap-26{gap:26px}
-.u-gap-27{gap:27px}
-.u-gap-28{gap:28px}
-.u-gap-29{gap:29px}
-.u-gap-30{gap:30px}
-.u-gap-31{gap:31px}
-.u-gap-32{gap:32px}
-.u-gap-33{gap:33px}
-.u-gap-34{gap:34px}
-.u-gap-35{gap:35px}
-.u-gap-36{gap:36px}
-.u-gap-37{gap:37px}
-.u-gap-38{gap:38px}
-.u-gap-39{gap:39px}
-.u-gap-40{gap:40px}
-.u-gap-41{gap:41px}
-.u-gap-42{gap:42px}
-.u-gap-43{gap:43px}
-.u-gap-44{gap:44px}
-.u-gap-45{gap:45px}
-.u-gap-46{gap:46px}
-.u-gap-47{gap:47px}
-.u-gap-48{gap:48px}
-.u-gap-49{gap:49px}
-.u-gap-50{gap:50px}
-.u-gap-51{gap:51px}
-.u-gap-52{gap:52px}
-.u-gap-53{gap:53px}
-.u-gap-54{gap:54px}
-.u-gap-55{gap:55px}
-.u-gap-56{gap:56px}
-.u-gap-57{gap:57px}
-.u-gap-58{gap:58px}
-.u-gap-59{gap:59px}
-.u-gap-60{gap:60px}
-.u-gap-61{gap:61px}
-.u-gap-62{gap:62px}
-.u-gap-63{gap:63px}
-.u-gap-64{gap:64px}
-.u-gap-65{gap:65px}
-.u-gap-66{gap:66px}
-.u-gap-67{gap:67px}
-.u-gap-68{gap:68px}
-.u-gap-69{gap:69px}
-.u-gap-70{gap:70px}
-.u-gap-71{gap:71px}
-.u-gap-72{gap:72px}
-.u-gap-73{gap:73px}
-.u-gap-74{gap:74px}
-.u-gap-75{gap:75px}
-.u-gap-76{gap:76px}
-.u-gap-77{gap:77px}
-.u-gap-78{gap:78px}
-.u-gap-79{gap:79px}
-.u-gap-80{gap:80px}
-.u-gap-81{gap:81px}
-.u-gap-82{gap:82px}
-.u-gap-83{gap:83px}
-.u-gap-84{gap:84px}
-.u-gap-85{gap:85px}
-.u-gap-86{gap:86px}
-.u-gap-87{gap:87px}
-.u-gap-88{gap:88px}
-.u-gap-89{gap:89px}
-.u-gap-90{gap:90px}
-.u-gap-91{gap:91px}
-.u-gap-92{gap:92px}
-.u-gap-93{gap:93px}
-.u-gap-94{gap:94px}
-.u-gap-95{gap:95px}
-.u-gap-96{gap:96px}
-.u-gap-97{gap:97px}
-.u-gap-98{gap:98px}
-.u-gap-99{gap:99px}
-.u-gap-100{gap:100px}
-.u-gap-101{gap:101px}
-.u-gap-102{gap:102px}
-.u-gap-103{gap:103px}
-.u-gap-104{gap:104px}
-.u-gap-105{gap:105px}
-.u-gap-106{gap:106px}
-.u-gap-107{gap:107px}
-.u-gap-108{gap:108px}
-.u-gap-109{gap:109px}
-.u-gap-110{gap:110px}
-.u-gap-111{gap:111px}
-.u-gap-112{gap:112px}
-.u-gap-113{gap:113px}
-.u-gap-114{gap:114px}
-.u-gap-115{gap:115px}
-.u-gap-116{gap:116px}
-.u-gap-117{gap:117px}
-.u-gap-118{gap:118px}
-.u-gap-119{gap:119px}
-.u-gap-120{gap:120px}
-.u-gap-121{gap:121px}
-.u-gap-122{gap:122px}
-.u-gap-123{gap:123px}
-.u-gap-124{gap:124px}
-.u-gap-125{gap:125px}
-.u-gap-126{gap:126px}
-.u-gap-127{gap:127px}
-.u-gap-128{gap:128px}
-.u-gap-129{gap:129px}
-.u-gap-130{gap:130px}
-.u-gap-131{gap:131px}
-.u-gap-132{gap:132px}
-.u-gap-133{gap:133px}
-.u-gap-134{gap:134px}
-.u-gap-135{gap:135px}
-.u-gap-136{gap:136px}
-.u-gap-137{gap:137px}
-.u-gap-138{gap:138px}
-.u-gap-139{gap:139px}
-.u-gap-140{gap:140px}
-.u-gap-141{gap:141px}
-.u-gap-142{gap:142px}
-.u-gap-143{gap:143px}
-.u-gap-144{gap:144px}
-.u-gap-145{gap:145px}
-.u-gap-146{gap:146px}
-.u-gap-147{gap:147px}
-.u-gap-148{gap:148px}
-.u-gap-149{gap:149px}
-.u-gap-150{gap:150px}
-.u-gap-151{gap:151px}
-.u-gap-152{gap:152px}
-.u-gap-153{gap:153px}
-.u-gap-154{gap:154px}
-.u-gap-155{gap:155px}
-.u-gap-156{gap:156px}
-.u-gap-157{gap:157px}
-.u-gap-158{gap:158px}
-.u-gap-159{gap:159px}
-.u-gap-160{gap:160px}
-.u-gap-161{gap:161px}
-.u-gap-162{gap:162px}
-.u-gap-163{gap:163px}
-.u-gap-164{gap:164px}
-.u-gap-165{gap:165px}
-.u-gap-166{gap:166px}
-.u-gap-167{gap:167px}
-.u-gap-168{gap:168px}
-.u-gap-169{gap:169px}
-.u-gap-170{gap:170px}
-.u-gap-171{gap:171px}
-.u-gap-172{gap:172px}
-.u-gap-173{gap:173px}
-.u-gap-174{gap:174px}
-.u-gap-175{gap:175px}
-.u-gap-176{gap:176px}
-.u-gap-177{gap:177px}
-.u-gap-178{gap:178px}
-.u-gap-179{gap:179px}
-.u-gap-180{gap:180px}
-.u-gap-181{gap:181px}
-.u-gap-182{gap:182px}
-.u-gap-183{gap:183px}
-.u-gap-184{gap:184px}
-.u-gap-185{gap:185px}
-.u-gap-186{gap:186px}
-.u-gap-187{gap:187px}
-.u-gap-188{gap:188px}
-.u-gap-189{gap:189px}
-.u-gap-190{gap:190px}
-.u-gap-191{gap:191px}
-.u-gap-192{gap:192px}
-.u-gap-193{gap:193px}
-.u-gap-194{gap:194px}
-.u-gap-195{gap:195px}
-.u-gap-196{gap:196px}
-.u-gap-197{gap:197px}
-.u-gap-198{gap:198px}
-.u-gap-199{gap:199px}
-.u-gap-200{gap:200px}
-.u-gap-201{gap:201px}
-.u-gap-202{gap:202px}
-.u-gap-203{gap:203px}
-.u-gap-204{gap:204px}
-.u-gap-205{gap:205px}
-.u-gap-206{gap:206px}
-.u-gap-207{gap:207px}
-.u-gap-208{gap:208px}
-.u-gap-209{gap:209px}
-.u-gap-210{gap:210px}
-.u-gap-211{gap:211px}
-.u-gap-212{gap:212px}
-.u-gap-213{gap:213px}
-.u-gap-214{gap:214px}
-.u-gap-215{gap:215px}
-.u-gap-216{gap:216px}
-.u-gap-217{gap:217px}
-.u-gap-218{gap:218px}
-.u-gap-219{gap:219px}
-.u-gap-220{gap:220px}
-.u-gap-221{gap:221px}
-.u-gap-222{gap:222px}
-.u-gap-223{gap:223px}
-.u-gap-224{gap:224px}
-.u-gap-225{gap:225px}
-.u-gap-226{gap:226px}
-.u-gap-227{gap:227px}
-.u-gap-228{gap:228px}
-.u-gap-229{gap:229px}
-.u-gap-230{gap:230px}
-.u-gap-231{gap:231px}
-.u-gap-232{gap:232px}
-.u-gap-233{gap:233px}
-.u-gap-234{gap:234px}
-.u-gap-235{gap:235px}
-.u-gap-236{gap:236px}
-.u-gap-237{gap:237px}
-.u-gap-238{gap:238px}
-.u-gap-239{gap:239px}
-.u-gap-240{gap:240px}
-.u-gap-241{gap:241px}
-.u-gap-242{gap:242px}
-.u-gap-243{gap:243px}
-.u-gap-244{gap:244px}
-.u-gap-245{gap:245px}
-.u-gap-246{gap:246px}
-.u-gap-247{gap:247px}
-.u-gap-248{gap:248px}
-.u-gap-249{gap:249px}
-.u-gap-250{gap:250px}
-.u-gap-251{gap:251px}
-.u-gap-252{gap:252px}
-.u-gap-253{gap:253px}
-.u-gap-254{gap:254px}
-.u-gap-255{gap:255px}
-.u-gap-256{gap:256px}
-.u-gap-257{gap:257px}
-.u-gap-258{gap:258px}
-.u-gap-259{gap:259px}
-.u-gap-260{gap:260px}
-.u-gap-261{gap:261px}
-.u-gap-262{gap:262px}
-.u-gap-263{gap:263px}
-.u-gap-264{gap:264px}
-.u-gap-265{gap:265px}
-.u-gap-266{gap:266px}
-.u-gap-267{gap:267px}
-.u-gap-268{gap:268px}
-.u-gap-269{gap:269px}
-.u-gap-270{gap:270px}
-.u-gap-271{gap:271px}
-.u-gap-272{gap:272px}
-.u-gap-273{gap:273px}
-.u-gap-274{gap:274px}
-.u-gap-275{gap:275px}
-.u-gap-276{gap:276px}
-.u-gap-277{gap:277px}
-.u-gap-278{gap:278px}
-.u-gap-279{gap:279px}
-.u-gap-280{gap:280px}
-.u-gap-281{gap:281px}
-.u-gap-282{gap:282px}
-.u-gap-283{gap:283px}
-.u-gap-284{gap:284px}
-.u-gap-285{gap:285px}
-.u-gap-286{gap:286px}
-.u-gap-287{gap:287px}
-.u-gap-288{gap:288px}
-.u-gap-289{gap:289px}
-.u-gap-290{gap:290px}
-.u-gap-291{gap:291px}
-.u-gap-292{gap:292px}
-.u-gap-293{gap:293px}
-.u-gap-294{gap:294px}
-.u-gap-295{gap:295px}
-.u-gap-296{gap:296px}
-.u-gap-297{gap:297px}
-.u-gap-298{gap:298px}
-.u-gap-299{gap:299px}
-.u-gap-300{gap:300px}
-.u-gap-301{gap:301px}
-.u-gap-302{gap:302px}
-.u-gap-303{gap:303px}
-.u-gap-304{gap:304px}
-.u-gap-305{gap:305px}
-.u-gap-306{gap:306px}
-.u-gap-307{gap:307px}
-.u-gap-308{gap:308px}
-.u-gap-309{gap:309px}
-.u-gap-310{gap:310px}
-.u-gap-311{gap:311px}
-.u-gap-312{gap:312px}
-.u-gap-313{gap:313px}
-.u-gap-314{gap:314px}
-.u-gap-315{gap:315px}
-.u-gap-316{gap:316px}
-.u-gap-317{gap:317px}
-.u-gap-318{gap:318px}
-.u-gap-319{gap:319px}
-.u-gap-320{gap:320px}
-.u-gap-321{gap:321px}
-.u-gap-322{gap:322px}
-.u-gap-323{gap:323px}
-.u-gap-324{gap:324px}
-.u-gap-325{gap:325px}
-.u-gap-326{gap:326px}
-.u-gap-327{gap:327px}
-.u-gap-328{gap:328px}
-.u-gap-329{gap:329px}
-.u-gap-330{gap:330px}
-.u-gap-331{gap:331px}
-.u-gap-332{gap:332px}
-.u-gap-333{gap:333px}
-.u-gap-334{gap:334px}
-.u-gap-335{gap:335px}
-.u-gap-336{gap:336px}
-.u-gap-337{gap:337px}
-.u-gap-338{gap:338px}
-.u-gap-339{gap:339px}
-.u-gap-340{gap:340px}
-.u-gap-341{gap:341px}
-.u-gap-342{gap:342px}
-.u-gap-343{gap:343px}
-.u-gap-344{gap:344px}
-.u-gap-345{gap:345px}
-.u-gap-346{gap:346px}
-.u-gap-347{gap:347px}
-.u-gap-348{gap:348px}
-.u-gap-349{gap:349px}
-.u-gap-350{gap:350px}
-.u-gap-351{gap:351px}
-.u-gap-352{gap:352px}
-.u-gap-353{gap:353px}
-.u-gap-354{gap:354px}
-.u-gap-355{gap:355px}
-.u-gap-356{gap:356px}
-.u-gap-357{gap:357px}
-.u-gap-358{gap:358px}
-.u-gap-359{gap:359px}
-.u-gap-360{gap:360px}
-.u-gap-361{gap:361px}
-.u-gap-362{gap:362px}
-.u-gap-363{gap:363px}
-.u-gap-364{gap:364px}
-.u-gap-365{gap:365px}
-.u-gap-366{gap:366px}
-.u-gap-367{gap:367px}
-.u-gap-368{gap:368px}
-.u-gap-369{gap:369px}
-.u-gap-370{gap:370px}
-.u-gap-371{gap:371px}
-.u-gap-372{gap:372px}
-.u-gap-373{gap:373px}
-.u-gap-374{gap:374px}
-.u-gap-375{gap:375px}
-.u-gap-376{gap:376px}
-.u-gap-377{gap:377px}
-.u-gap-378{gap:378px}
-.u-gap-379{gap:379px}
-.u-gap-380{gap:380px}
-.u-gap-381{gap:381px}
-.u-gap-382{gap:382px}
-.u-gap-383{gap:383px}
-.u-gap-384{gap:384px}
-.u-gap-385{gap:385px}
-.u-gap-386{gap:386px}
-.u-gap-387{gap:387px}
-.u-gap-388{gap:388px}
-.u-gap-389{gap:389px}
-.u-gap-390{gap:390px}
-.u-gap-391{gap:391px}
-.u-gap-392{gap:392px}
-.u-gap-393{gap:393px}
-.u-gap-394{gap:394px}
-.u-gap-395{gap:395px}
-.u-gap-396{gap:396px}
-.u-gap-397{gap:397px}
-.u-gap-398{gap:398px}
-.u-gap-399{gap:399px}
-.u-gap-400{gap:400px}
-.u-pad-1{padding:1px}
-.u-pad-2{padding:2px}
-.u-pad-3{padding:3px}
-.u-pad-4{padding:4px}
-.u-pad-5{padding:5px}
-.u-pad-6{padding:6px}
-.u-pad-7{padding:7px}
-.u-pad-8{padding:8px}
-.u-pad-9{padding:9px}
-.u-pad-10{padding:10px}
-.u-pad-11{padding:11px}
-.u-pad-12{padding:12px}
-.u-pad-13{padding:13px}
-.u-pad-14{padding:14px}
-.u-pad-15{padding:15px}
-.u-pad-16{padding:16px}
-.u-pad-17{padding:17px}
-.u-pad-18{padding:18px}
-.u-pad-19{padding:19px}
-.u-pad-20{padding:20px}
-.u-pad-21{padding:21px}
-.u-pad-22{padding:22px}
-.u-pad-23{padding:23px}
-.u-pad-24{padding:24px}
-.u-pad-25{padding:25px}
-.u-pad-26{padding:26px}
-.u-pad-27{padding:27px}
-.u-pad-28{padding:28px}
-.u-pad-29{padding:29px}
-.u-pad-30{padding:30px}
-.u-pad-31{padding:31px}
-.u-pad-32{padding:32px}
-.u-pad-33{padding:33px}
-.u-pad-34{padding:34px}
-.u-pad-35{padding:35px}
-.u-pad-36{padding:36px}
-.u-pad-37{padding:37px}
-.u-pad-38{padding:38px}
-.u-pad-39{padding:39px}
-.u-pad-40{padding:40px}
-.u-pad-41{padding:41px}
-.u-pad-42{padding:42px}
-.u-pad-43{padding:43px}
-.u-pad-44{padding:44px}
-.u-pad-45{padding:45px}
-.u-pad-46{padding:46px}
-.u-pad-47{padding:47px}
-.u-pad-48{padding:48px}
-.u-pad-49{padding:49px}
-.u-pad-50{padding:50px}
-.u-pad-51{padding:51px}
-.u-pad-52{padding:52px}
-.u-pad-53{padding:53px}
-.u-pad-54{padding:54px}
-.u-pad-55{padding:55px}
-.u-pad-56{padding:56px}
-.u-pad-57{padding:57px}
-.u-pad-58{padding:58px}
-.u-pad-59{padding:59px}
-.u-pad-60{padding:60px}
-.u-pad-61{padding:61px}
-.u-pad-62{padding:62px}
-.u-pad-63{padding:63px}
-.u-pad-64{padding:64px}
-.u-pad-65{padding:65px}
-.u-pad-66{padding:66px}
-.u-pad-67{padding:67px}
-.u-pad-68{padding:68px}
-.u-pad-69{padding:69px}
-.u-pad-70{padding:70px}
-.u-pad-71{padding:71px}
-.u-pad-72{padding:72px}
-.u-pad-73{padding:73px}
-.u-pad-74{padding:74px}
-.u-pad-75{padding:75px}
-.u-pad-76{padding:76px}
-.u-pad-77{padding:77px}
-.u-pad-78{padding:78px}
-.u-pad-79{padding:79px}
-.u-pad-80{padding:80px}
-.u-pad-81{padding:81px}
-.u-pad-82{padding:82px}
-.u-pad-83{padding:83px}
-.u-pad-84{padding:84px}
-.u-pad-85{padding:85px}
-.u-pad-86{padding:86px}
-.u-pad-87{padding:87px}
-.u-pad-88{padding:88px}
-.u-pad-89{padding:89px}
-.u-pad-90{padding:90px}
-.u-pad-91{padding:91px}
-.u-pad-92{padding:92px}
-.u-pad-93{padding:93px}
-.u-pad-94{padding:94px}
-.u-pad-95{padding:95px}
-.u-pad-96{padding:96px}
-.u-pad-97{padding:97px}
-.u-pad-98{padding:98px}
-.u-pad-99{padding:99px}
-.u-pad-100{padding:100px}
-.u-pad-101{padding:101px}
-.u-pad-102{padding:102px}
-.u-pad-103{padding:103px}
-.u-pad-104{padding:104px}
-.u-pad-105{padding:105px}
-.u-pad-106{padding:106px}
-.u-pad-107{padding:107px}
-.u-pad-108{padding:108px}
-.u-pad-109{padding:109px}
-.u-pad-110{padding:110px}
-.u-pad-111{padding:111px}
-.u-pad-112{padding:112px}
-.u-pad-113{padding:113px}
-.u-pad-114{padding:114px}
-.u-pad-115{padding:115px}
-.u-pad-116{padding:116px}
-.u-pad-117{padding:117px}
-.u-pad-118{padding:118px}
-.u-pad-119{padding:119px}
-.u-pad-120{padding:120px}
-.u-pad-121{padding:121px}
-.u-pad-122{padding:122px}
-.u-pad-123{padding:123px}
-.u-pad-124{padding:124px}
-.u-pad-125{padding:125px}
-.u-pad-126{padding:126px}
-.u-pad-127{padding:127px}
-.u-pad-128{padding:128px}
-.u-pad-129{padding:129px}
-.u-pad-130{padding:130px}
-.u-pad-131{padding:131px}
-.u-pad-132{padding:132px}
-.u-pad-133{padding:133px}
-.u-pad-134{padding:134px}
-.u-pad-135{padding:135px}
-.u-pad-136{padding:136px}
-.u-pad-137{padding:137px}
-.u-pad-138{padding:138px}
-.u-pad-139{padding:139px}
-.u-pad-140{padding:140px}
-.u-pad-141{padding:141px}
-.u-pad-142{padding:142px}
-.u-pad-143{padding:143px}
-.u-pad-144{padding:144px}
-.u-pad-145{padding:145px}
-.u-pad-146{padding:146px}
-.u-pad-147{padding:147px}
-.u-pad-148{padding:148px}
-.u-pad-149{padding:149px}
-.u-pad-150{padding:150px}
-.u-pad-151{padding:151px}
-.u-pad-152{padding:152px}
-.u-pad-153{padding:153px}
-.u-pad-154{padding:154px}
-.u-pad-155{padding:155px}
-.u-pad-156{padding:156px}
-.u-pad-157{padding:157px}
-.u-pad-158{padding:158px}
-.u-pad-159{padding:159px}
-.u-pad-160{padding:160px}
-.u-pad-161{padding:161px}
-.u-pad-162{padding:162px}
-.u-pad-163{padding:163px}
-.u-pad-164{padding:164px}
-.u-pad-165{padding:165px}
-.u-pad-166{padding:166px}
-.u-pad-167{padding:167px}
-.u-pad-168{padding:168px}
-.u-pad-169{padding:169px}
-.u-pad-170{padding:170px}
-.u-pad-171{padding:171px}
-.u-pad-172{padding:172px}
-.u-pad-173{padding:173px}
-.u-pad-174{padding:174px}
-.u-pad-175{padding:175px}
-.u-pad-176{padding:176px}
-.u-pad-177{padding:177px}
-.u-pad-178{padding:178px}
-.u-pad-179{padding:179px}
-.u-pad-180{padding:180px}
-.u-pad-181{padding:181px}
-.u-pad-182{padding:182px}
-.u-pad-183{padding:183px}
-.u-pad-184{padding:184px}
-.u-pad-185{padding:185px}
-.u-pad-186{padding:186px}
-.u-pad-187{padding:187px}
-.u-pad-188{padding:188px}
-.u-pad-189{padding:189px}
-.u-pad-190{padding:190px}
-.u-pad-191{padding:191px}
-.u-pad-192{padding:192px}
-.u-pad-193{padding:193px}
-.u-pad-194{padding:194px}
-.u-pad-195{padding:195px}
-.u-pad-196{padding:196px}
-.u-pad-197{padding:197px}
-.u-pad-198{padding:198px}
-.u-pad-199{padding:199px}
-.u-pad-200{padding:200px}
-.u-pad-201{padding:201px}
-.u-pad-202{padding:202px}
-.u-pad-203{padding:203px}
-.u-pad-204{padding:204px}
-.u-pad-205{padding:205px}
-.u-pad-206{padding:206px}
-.u-pad-207{padding:207px}
-.u-pad-208{padding:208px}
-.u-pad-209{padding:209px}
-.u-pad-210{padding:210px}
-.u-pad-211{padding:211px}
-.u-pad-212{padding:212px}
-.u-pad-213{padding:213px}
-.u-pad-214{padding:214px}
-.u-pad-215{padding:215px}
-.u-pad-216{padding:216px}
-.u-pad-217{padding:217px}
-.u-pad-218{padding:218px}
-.u-pad-219{padding:219px}
-.u-pad-220{padding:220px}
-.u-pad-221{padding:221px}
-.u-pad-222{padding:222px}
-.u-pad-223{padding:223px}
-.u-pad-224{padding:224px}
-.u-pad-225{padding:225px}
-.u-pad-226{padding:226px}
-.u-pad-227{padding:227px}
-.u-pad-228{padding:228px}
-.u-pad-229{padding:229px}
-.u-pad-230{padding:230px}
-.u-pad-231{padding:231px}
-.u-pad-232{padding:232px}
-.u-pad-233{padding:233px}
-.u-pad-234{padding:234px}
-.u-pad-235{padding:235px}
-.u-pad-236{padding:236px}
-.u-pad-237{padding:237px}
-.u-pad-238{padding:238px}
-.u-pad-239{padding:239px}
-.u-pad-240{padding:240px}
-.u-pad-241{padding:241px}
-.u-pad-242{padding:242px}
-.u-pad-243{padding:243px}
-.u-pad-244{padding:244px}
-.u-pad-245{padding:245px}
-.u-pad-246{padding:246px}
-.u-pad-247{padding:247px}
-.u-pad-248{padding:248px}
-.u-pad-249{padding:249px}
-.u-pad-250{padding:250px}
-.u-pad-251{padding:251px}
-.u-pad-252{padding:252px}
-.u-pad-253{padding:253px}
-.u-pad-254{padding:254px}
-.u-pad-255{padding:255px}
-.u-pad-256{padding:256px}
-.u-pad-257{padding:257px}
-.u-pad-258{padding:258px}
-.u-pad-259{padding:259px}
-.u-pad-260{padding:260px}
-.u-pad-261{padding:261px}
-.u-pad-262{padding:262px}
-.u-pad-263{padding:263px}
-.u-pad-264{padding:264px}
-.u-pad-265{padding:265px}
-.u-pad-266{padding:266px}
-.u-pad-267{padding:267px}
-.u-pad-268{padding:268px}
-.u-pad-269{padding:269px}
-.u-pad-270{padding:270px}
-.u-pad-271{padding:271px}
-.u-pad-272{padding:272px}
-.u-pad-273{padding:273px}
-.u-pad-274{padding:274px}
-.u-pad-275{padding:275px}
-.u-pad-276{padding:276px}
-.u-pad-277{padding:277px}
-.u-pad-278{padding:278px}
-.u-pad-279{padding:279px}
-.u-pad-280{padding:280px}
-.u-pad-281{padding:281px}
-.u-pad-282{padding:282px}
-.u-pad-283{padding:283px}
-.u-pad-284{padding:284px}
-.u-pad-285{padding:285px}
-.u-pad-286{padding:286px}
-.u-pad-287{padding:287px}
-.u-pad-288{padding:288px}
-.u-pad-289{padding:289px}
-.u-pad-290{padding:290px}
-.u-pad-291{padding:291px}
-.u-pad-292{padding:292px}
-.u-pad-293{padding:293px}
-.u-pad-294{padding:294px}
-.u-pad-295{padding:295px}
-.u-pad-296{padding:296px}
-.u-pad-297{padding:297px}
-.u-pad-298{padding:298px}
-.u-pad-299{padding:299px}
-.u-pad-300{padding:300px}
-.u-pad-301{padding:301px}
-.u-pad-302{padding:302px}
-.u-pad-303{padding:303px}
-.u-pad-304{padding:304px}
-.u-pad-305{padding:305px}
-.u-pad-306{padding:306px}
-.u-pad-307{padding:307px}
-.u-pad-308{padding:308px}
-.u-pad-309{padding:309px}
-.u-pad-310{padding:310px}
-.u-pad-311{padding:311px}
-.u-pad-312{padding:312px}
-.u-pad-313{padding:313px}
-.u-pad-314{padding:314px}
-.u-pad-315{padding:315px}
-.u-pad-316{padding:316px}
-.u-pad-317{padding:317px}
-.u-pad-318{padding:318px}
-.u-pad-319{padding:319px}
-.u-pad-320{padding:320px}
-.u-pad-321{padding:321px}
-.u-pad-322{padding:322px}
-.u-pad-323{padding:323px}
-.u-pad-324{padding:324px}
-.u-pad-325{padding:325px}
-.u-pad-326{padding:326px}
-.u-pad-327{padding:327px}
-.u-pad-328{padding:328px}
-.u-pad-329{padding:329px}
-.u-pad-330{padding:330px}
-.u-pad-331{padding:331px}
-.u-pad-332{padding:332px}
-.u-pad-333{padding:333px}
-.u-pad-334{padding:334px}
-.u-pad-335{padding:335px}
-.u-pad-336{padding:336px}
-.u-pad-337{padding:337px}
-.u-pad-338{padding:338px}
-.u-pad-339{padding:339px}
-.u-pad-340{padding:340px}
-.u-pad-341{padding:341px}
-.u-pad-342{padding:342px}
-.u-pad-343{padding:343px}
-.u-pad-344{padding:344px}
-.u-pad-345{padding:345px}
-.u-pad-346{padding:346px}
-.u-pad-347{padding:347px}
-.u-pad-348{padding:348px}
-.u-pad-349{padding:349px}
-.u-pad-350{padding:350px}
-.u-pad-351{padding:351px}
-.u-pad-352{padding:352px}
-.u-pad-353{padding:353px}
-.u-pad-354{padding:354px}
-.u-pad-355{padding:355px}
-.u-pad-356{padding:356px}
-.u-pad-357{padding:357px}
-.u-pad-358{padding:358px}
-.u-pad-359{padding:359px}
-.u-pad-360{padding:360px}
-.u-pad-361{padding:361px}
-.u-pad-362{padding:362px}
-.u-pad-363{padding:363px}
-.u-pad-364{padding:364px}
-.u-pad-365{padding:365px}
-.u-pad-366{padding:366px}
-.u-pad-367{padding:367px}
-.u-pad-368{padding:368px}
-.u-pad-369{padding:369px}
-.u-pad-370{padding:370px}
-.u-pad-371{padding:371px}
-.u-pad-372{padding:372px}
-.u-pad-373{padding:373px}
-.u-pad-374{padding:374px}
-.u-pad-375{padding:375px}
-.u-pad-376{padding:376px}
-.u-pad-377{padding:377px}
-.u-pad-378{padding:378px}
-.u-pad-379{padding:379px}
-.u-pad-380{padding:380px}
-.u-pad-381{padding:381px}
-.u-pad-382{padding:382px}
-.u-pad-383{padding:383px}
-.u-pad-384{padding:384px}
-.u-pad-385{padding:385px}
-.u-pad-386{padding:386px}
-.u-pad-387{padding:387px}
-.u-pad-388{padding:388px}
-.u-pad-389{padding:389px}
-.u-pad-390{padding:390px}
-.u-pad-391{padding:391px}
-.u-pad-392{padding:392px}
-.u-pad-393{padding:393px}
-.u-pad-394{padding:394px}
-.u-pad-395{padding:395px}
-.u-pad-396{padding:396px}
-.u-pad-397{padding:397px}
-.u-pad-398{padding:398px}
-.u-pad-399{padding:399px}
-.u-pad-400{padding:400px}
-.u-radius-1{border-radius:1px}
-.u-radius-2{border-radius:2px}
-.u-radius-3{border-radius:3px}
-.u-radius-4{border-radius:4px}
-.u-radius-5{border-radius:5px}
-.u-radius-6{border-radius:6px}
-.u-radius-7{border-radius:7px}
-.u-radius-8{border-radius:8px}
-.u-radius-9{border-radius:9px}
-.u-radius-10{border-radius:10px}
-.u-radius-11{border-radius:11px}
-.u-radius-12{border-radius:12px}
-.u-radius-13{border-radius:13px}
-.u-radius-14{border-radius:14px}
-.u-radius-15{border-radius:15px}
-.u-radius-16{border-radius:16px}
-.u-radius-17{border-radius:17px}
-.u-radius-18{border-radius:18px}
-.u-radius-19{border-radius:19px}
-.u-radius-20{border-radius:20px}
-.u-radius-21{border-radius:21px}
-.u-radius-22{border-radius:22px}
-.u-radius-23{border-radius:23px}
-.u-radius-24{border-radius:24px}
-.u-radius-25{border-radius:25px}
-.u-radius-26{border-radius:26px}
-.u-radius-27{border-radius:27px}
-.u-radius-28{border-radius:28px}
-.u-radius-29{border-radius:29px}
-.u-radius-30{border-radius:30px}
-.u-radius-31{border-radius:31px}
-.u-radius-32{border-radius:32px}
-.u-radius-33{border-radius:33px}
-.u-radius-34{border-radius:34px}
-.u-radius-35{border-radius:35px}
-.u-radius-36{border-radius:36px}
-.u-radius-37{border-radius:37px}
-.u-radius-38{border-radius:38px}
-.u-radius-39{border-radius:39px}
-.u-radius-40{border-radius:40px}
-.u-radius-41{border-radius:41px}
-.u-radius-42{border-radius:42px}
-.u-radius-43{border-radius:43px}
-.u-radius-44{border-radius:44px}
-.u-radius-45{border-radius:45px}
-.u-radius-46{border-radius:46px}
-.u-radius-47{border-radius:47px}
-.u-radius-48{border-radius:48px}
-.u-radius-49{border-radius:49px}
-.u-radius-50{border-radius:50px}
-.u-radius-51{border-radius:51px}
-.u-radius-52{border-radius:52px}
-.u-radius-53{border-radius:53px}
-.u-radius-54{border-radius:54px}
-.u-radius-55{border-radius:55px}
-.u-radius-56{border-radius:56px}
-.u-radius-57{border-radius:57px}
-.u-radius-58{border-radius:58px}
-.u-radius-59{border-radius:59px}
-.u-radius-60{border-radius:60px}
-.u-radius-61{border-radius:61px}
-.u-radius-62{border-radius:62px}
-.u-radius-63{border-radius:63px}
-.u-radius-64{border-radius:64px}
-.u-radius-65{border-radius:65px}
-.u-radius-66{border-radius:66px}
-.u-radius-67{border-radius:67px}
-.u-radius-68{border-radius:68px}
-.u-radius-69{border-radius:69px}
-.u-radius-70{border-radius:70px}
-.u-radius-71{border-radius:71px}
-.u-radius-72{border-radius:72px}
-.u-radius-73{border-radius:73px}
-.u-radius-74{border-radius:74px}
-.u-radius-75{border-radius:75px}
-.u-radius-76{border-radius:76px}
-.u-radius-77{border-radius:77px}
-.u-radius-78{border-radius:78px}
-.u-radius-79{border-radius:79px}
-.u-radius-80{border-radius:80px}
-.u-radius-81{border-radius:81px}
-.u-radius-82{border-radius:82px}
-.u-radius-83{border-radius:83px}
-.u-radius-84{border-radius:84px}
-.u-radius-85{border-radius:85px}
-.u-radius-86{border-radius:86px}
-.u-radius-87{border-radius:87px}
-.u-radius-88{border-radius:88px}
-.u-radius-89{border-radius:89px}
-.u-radius-90{border-radius:90px}
-.u-radius-91{border-radius:91px}
-.u-radius-92{border-radius:92px}
-.u-radius-93{border-radius:93px}
-.u-radius-94{border-radius:94px}
-.u-radius-95{border-radius:95px}
-.u-radius-96{border-radius:96px}
-.u-radius-97{border-radius:97px}
-.u-radius-98{border-radius:98px}
-.u-radius-99{border-radius:99px}
-.u-radius-100{border-radius:100px}
-.u-radius-101{border-radius:101px}
-.u-radius-102{border-radius:102px}
-.u-radius-103{border-radius:103px}
-.u-radius-104{border-radius:104px}
-.u-radius-105{border-radius:105px}
-.u-radius-106{border-radius:106px}
-.u-radius-107{border-radius:107px}
-.u-radius-108{border-radius:108px}
-.u-radius-109{border-radius:109px}
-.u-radius-110{border-radius:110px}
-.u-radius-111{border-radius:111px}
-.u-radius-112{border-radius:112px}
-.u-radius-113{border-radius:113px}
-.u-radius-114{border-radius:114px}
-.u-radius-115{border-radius:115px}
-.u-radius-116{border-radius:116px}
-.u-radius-117{border-radius:117px}
-.u-radius-118{border-radius:118px}
-.u-radius-119{border-radius:119px}
-.u-radius-120{border-radius:120px}
-.u-radius-121{border-radius:121px}
-.u-radius-122{border-radius:122px}
-.u-radius-123{border-radius:123px}
-.u-radius-124{border-radius:124px}
-.u-radius-125{border-radius:125px}
-.u-radius-126{border-radius:126px}
-.u-radius-127{border-radius:127px}
-.u-radius-128{border-radius:128px}
-.u-radius-129{border-radius:129px}
-.u-radius-130{border-radius:130px}
-.u-radius-131{border-radius:131px}
-.u-radius-132{border-radius:132px}
-.u-radius-133{border-radius:133px}
-.u-radius-134{border-radius:134px}
-.u-radius-135{border-radius:135px}
-.u-radius-136{border-radius:136px}
-.u-radius-137{border-radius:137px}
-.u-radius-138{border-radius:138px}
-.u-radius-139{border-radius:139px}
-.u-radius-140{border-radius:140px}
-.u-radius-141{border-radius:141px}
-.u-radius-142{border-radius:142px}
-.u-radius-143{border-radius:143px}
-.u-radius-144{border-radius:144px}
-.u-radius-145{border-radius:145px}
-.u-radius-146{border-radius:146px}
-.u-radius-147{border-radius:147px}
-.u-radius-148{border-radius:148px}
-.u-radius-149{border-radius:149px}
-.u-radius-150{border-radius:150px}
-.u-radius-151{border-radius:151px}
-.u-radius-152{border-radius:152px}
-.u-radius-153{border-radius:153px}
-.u-radius-154{border-radius:154px}
-.u-radius-155{border-radius:155px}
-.u-radius-156{border-radius:156px}
-.u-radius-157{border-radius:157px}
-.u-radius-158{border-radius:158px}
-.u-radius-159{border-radius:159px}
-.u-radius-160{border-radius:160px}
-.u-radius-161{border-radius:161px}
-.u-radius-162{border-radius:162px}
-.u-radius-163{border-radius:163px}
-.u-radius-164{border-radius:164px}
-.u-radius-165{border-radius:165px}
-.u-radius-166{border-radius:166px}
-.u-radius-167{border-radius:167px}
-.u-radius-168{border-radius:168px}
-.u-radius-169{border-radius:169px}
-.u-radius-170{border-radius:170px}
-.u-radius-171{border-radius:171px}
-.u-radius-172{border-radius:172px}
-.u-radius-173{border-radius:173px}
-.u-radius-174{border-radius:174px}
-.u-radius-175{border-radius:175px}
-.u-radius-176{border-radius:176px}
-.u-radius-177{border-radius:177px}
-.u-radius-178{border-radius:178px}
-.u-radius-179{border-radius:179px}
-.u-radius-180{border-radius:180px}
-.u-radius-181{border-radius:181px}
-.u-radius-182{border-radius:182px}
-.u-radius-183{border-radius:183px}
-.u-radius-184{border-radius:184px}
-.u-radius-185{border-radius:185px}
-.u-radius-186{border-radius:186px}
-.u-radius-187{border-radius:187px}
-.u-radius-188{border-radius:188px}
-.u-radius-189{border-radius:189px}
-.u-radius-190{border-radius:190px}
-.u-radius-191{border-radius:191px}
-.u-radius-192{border-radius:192px}
-.u-radius-193{border-radius:193px}
-.u-radius-194{border-radius:194px}
-.u-radius-195{border-radius:195px}
-.u-radius-196{border-radius:196px}
-.u-radius-197{border-radius:197px}
-.u-radius-198{border-radius:198px}
-.u-radius-199{border-radius:199px}
-.u-radius-200{border-radius:200px}
-.u-radius-201{border-radius:201px}
-.u-radius-202{border-radius:202px}
-.u-radius-203{border-radius:203px}
-.u-radius-204{border-radius:204px}
-.u-radius-205{border-radius:205px}
-.u-radius-206{border-radius:206px}
-.u-radius-207{border-radius:207px}
-.u-radius-208{border-radius:208px}
-.u-radius-209{border-radius:209px}
-.u-radius-210{border-radius:210px}
-.u-radius-211{border-radius:211px}
-.u-radius-212{border-radius:212px}
-.u-radius-213{border-radius:213px}
-.u-radius-214{border-radius:214px}
-.u-radius-215{border-radius:215px}
-.u-radius-216{border-radius:216px}
-.u-radius-217{border-radius:217px}
-.u-radius-218{border-radius:218px}
-.u-radius-219{border-radius:219px}
-.u-radius-220{border-radius:220px}
-.u-radius-221{border-radius:221px}
-.u-radius-222{border-radius:222px}
-.u-radius-223{border-radius:223px}
-.u-radius-224{border-radius:224px}
-.u-radius-225{border-radius:225px}
-.u-radius-226{border-radius:226px}
-.u-radius-227{border-radius:227px}
-.u-radius-228{border-radius:228px}
-.u-radius-229{border-radius:229px}
-.u-radius-230{border-radius:230px}
-.u-radius-231{border-radius:231px}
-.u-radius-232{border-radius:232px}
-.u-radius-233{border-radius:233px}
-.u-radius-234{border-radius:234px}
-.u-radius-235{border-radius:235px}
-.u-radius-236{border-radius:236px}
-.u-radius-237{border-radius:237px}
-.u-radius-238{border-radius:238px}
-.u-radius-239{border-radius:239px}
-.u-radius-240{border-radius:240px}
-.u-radius-241{border-radius:241px}
-.u-radius-242{border-radius:242px}
-.u-radius-243{border-radius:243px}
-.u-radius-244{border-radius:244px}
-.u-radius-245{border-radius:245px}
-.u-radius-246{border-radius:246px}
-.u-radius-247{border-radius:247px}
-.u-radius-248{border-radius:248px}
-.u-radius-249{border-radius:249px}
-.u-radius-250{border-radius:250px}
-.u-radius-251{border-radius:251px}
-.u-radius-252{border-radius:252px}
-.u-radius-253{border-radius:253px}
-.u-radius-254{border-radius:254px}
-.u-radius-255{border-radius:255px}
-.u-radius-256{border-radius:256px}
-.u-radius-257{border-radius:257px}
-.u-radius-258{border-radius:258px}
-.u-radius-259{border-radius:259px}
-.u-radius-260{border-radius:260px}
-.u-radius-261{border-radius:261px}
-.u-radius-262{border-radius:262px}
-.u-radius-263{border-radius:263px}
-.u-radius-264{border-radius:264px}
-.u-radius-265{border-radius:265px}
-.u-radius-266{border-radius:266px}
-.u-radius-267{border-radius:267px}
-.u-radius-268{border-radius:268px}
-.u-radius-269{border-radius:269px}
-.u-radius-270{border-radius:270px}
-.u-radius-271{border-radius:271px}
-.u-radius-272{border-radius:272px}
-.u-radius-273{border-radius:273px}
-.u-radius-274{border-radius:274px}
-.u-radius-275{border-radius:275px}
-.u-radius-276{border-radius:276px}
-.u-radius-277{border-radius:277px}
-.u-radius-278{border-radius:278px}
-.u-radius-279{border-radius:279px}
-.u-radius-280{border-radius:280px}
-.u-radius-281{border-radius:281px}
-.u-radius-282{border-radius:282px}
-.u-radius-283{border-radius:283px}
-.u-radius-284{border-radius:284px}
-.u-radius-285{border-radius:285px}
-.u-radius-286{border-radius:286px}
-.u-radius-287{border-radius:287px}
-.u-radius-288{border-radius:288px}
-.u-radius-289{border-radius:289px}
-.u-radius-290{border-radius:290px}
-.u-radius-291{border-radius:291px}
-.u-radius-292{border-radius:292px}
-.u-radius-293{border-radius:293px}
-.u-radius-294{border-radius:294px}
-.u-radius-295{border-radius:295px}
-.u-radius-296{border-radius:296px}
-.u-radius-297{border-radius:297px}
-.u-radius-298{border-radius:298px}
-.u-radius-299{border-radius:299px}
-.u-radius-300{border-radius:300px}
-.u-radius-301{border-radius:301px}
-.u-radius-302{border-radius:302px}
-.u-radius-303{border-radius:303px}
-.u-radius-304{border-radius:304px}
-.u-radius-305{border-radius:305px}
-.u-radius-306{border-radius:306px}
-.u-radius-307{border-radius:307px}
-.u-radius-308{border-radius:308px}
-.u-radius-309{border-radius:309px}
-.u-radius-310{border-radius:310px}
-.u-radius-311{border-radius:311px}
-.u-radius-312{border-radius:312px}
-.u-radius-313{border-radius:313px}
-.u-radius-314{border-radius:314px}
-.u-radius-315{border-radius:315px}
-.u-radius-316{border-radius:316px}
-.u-radius-317{border-radius:317px}
-.u-radius-318{border-radius:318px}
-.u-radius-319{border-radius:319px}
-.u-radius-320{border-radius:320px}
-.u-radius-321{border-radius:321px}
-.u-radius-322{border-radius:322px}
-.u-radius-323{border-radius:323px}
-.u-radius-324{border-radius:324px}
-.u-radius-325{border-radius:325px}
-.u-radius-326{border-radius:326px}
-.u-radius-327{border-radius:327px}
-.u-radius-328{border-radius:328px}
-.u-radius-329{border-radius:329px}
-.u-radius-330{border-radius:330px}
-.u-radius-331{border-radius:331px}
-.u-radius-332{border-radius:332px}
-.u-radius-333{border-radius:333px}
-.u-radius-334{border-radius:334px}
-.u-radius-335{border-radius:335px}
-.u-radius-336{border-radius:336px}
-.u-radius-337{border-radius:337px}
-.u-radius-338{border-radius:338px}
-.u-radius-339{border-radius:339px}
-.u-radius-340{border-radius:340px}
-.u-radius-341{border-radius:341px}
-.u-radius-342{border-radius:342px}
-.u-radius-343{border-radius:343px}
-.u-radius-344{border-radius:344px}
-.u-radius-345{border-radius:345px}
-.u-radius-346{border-radius:346px}
-.u-radius-347{border-radius:347px}
-.u-radius-348{border-radius:348px}
-.u-radius-349{border-radius:349px}
-.u-radius-350{border-radius:350px}
-.u-radius-351{border-radius:351px}
-.u-radius-352{border-radius:352px}
-.u-radius-353{border-radius:353px}
-.u-radius-354{border-radius:354px}
-.u-radius-355{border-radius:355px}
-.u-radius-356{border-radius:356px}
-.u-radius-357{border-radius:357px}
-.u-radius-358{border-radius:358px}
-.u-radius-359{border-radius:359px}
-.u-radius-360{border-radius:360px}
-.u-radius-361{border-radius:361px}
-.u-radius-362{border-radius:362px}
-.u-radius-363{border-radius:363px}
-.u-radius-364{border-radius:364px}
-.u-radius-365{border-radius:365px}
-.u-radius-366{border-radius:366px}
-.u-radius-367{border-radius:367px}
-.u-radius-368{border-radius:368px}
-.u-radius-369{border-radius:369px}
-.u-radius-370{border-radius:370px}
-.u-radius-371{border-radius:371px}
-.u-radius-372{border-radius:372px}
-.u-radius-373{border-radius:373px}
-.u-radius-374{border-radius:374px}
-.u-radius-375{border-radius:375px}
-.u-radius-376{border-radius:376px}
-.u-radius-377{border-radius:377px}
-.u-radius-378{border-radius:378px}
-.u-radius-379{border-radius:379px}
-.u-radius-380{border-radius:380px}
-.u-radius-381{border-radius:381px}
-.u-radius-382{border-radius:382px}
-.u-radius-383{border-radius:383px}
-.u-radius-384{border-radius:384px}
-.u-radius-385{border-radius:385px}
-.u-radius-386{border-radius:386px}
-.u-radius-387{border-radius:387px}
-.u-radius-388{border-radius:388px}
-.u-radius-389{border-radius:389px}
-.u-radius-390{border-radius:390px}
-.u-radius-391{border-radius:391px}
-.u-radius-392{border-radius:392px}
-.u-radius-393{border-radius:393px}
-.u-radius-394{border-radius:394px}
-.u-radius-395{border-radius:395px}
-.u-radius-396{border-radius:396px}
-.u-radius-397{border-radius:397px}
-.u-radius-398{border-radius:398px}
-.u-radius-399{border-radius:399px}
-.u-radius-400{border-radius:400px}
-.u-width-1{width:1px;max-width:100%}
-.u-width-2{width:2px;max-width:100%}
-.u-width-3{width:3px;max-width:100%}
-.u-width-4{width:4px;max-width:100%}
-.u-width-5{width:5px;max-width:100%}
-.u-width-6{width:6px;max-width:100%}
-.u-width-7{width:7px;max-width:100%}
-.u-width-8{width:8px;max-width:100%}
-.u-width-9{width:9px;max-width:100%}
-.u-width-10{width:10px;max-width:100%}
-.u-width-11{width:11px;max-width:100%}
-.u-width-12{width:12px;max-width:100%}
-.u-width-13{width:13px;max-width:100%}
-.u-width-14{width:14px;max-width:100%}
-.u-width-15{width:15px;max-width:100%}
-.u-width-16{width:16px;max-width:100%}
-.u-width-17{width:17px;max-width:100%}
-.u-width-18{width:18px;max-width:100%}
-.u-width-19{width:19px;max-width:100%}
-.u-width-20{width:20px;max-width:100%}
-.u-width-21{width:21px;max-width:100%}
-.u-width-22{width:22px;max-width:100%}
-.u-width-23{width:23px;max-width:100%}
-.u-width-24{width:24px;max-width:100%}
-.u-width-25{width:25px;max-width:100%}
-.u-width-26{width:26px;max-width:100%}
-.u-width-27{width:27px;max-width:100%}
-.u-width-28{width:28px;max-width:100%}
-.u-width-29{width:29px;max-width:100%}
-.u-width-30{width:30px;max-width:100%}
-.u-width-31{width:31px;max-width:100%}
-.u-width-32{width:32px;max-width:100%}
-.u-width-33{width:33px;max-width:100%}
-.u-width-34{width:34px;max-width:100%}
-.u-width-35{width:35px;max-width:100%}
-.u-width-36{width:36px;max-width:100%}
-.u-width-37{width:37px;max-width:100%}
-.u-width-38{width:38px;max-width:100%}
-.u-width-39{width:39px;max-width:100%}
-.u-width-40{width:40px;max-width:100%}
-.u-width-41{width:41px;max-width:100%}
-.u-width-42{width:42px;max-width:100%}
-.u-width-43{width:43px;max-width:100%}
-.u-width-44{width:44px;max-width:100%}
-.u-width-45{width:45px;max-width:100%}
-.u-width-46{width:46px;max-width:100%}
-.u-width-47{width:47px;max-width:100%}
-.u-width-48{width:48px;max-width:100%}
-.u-width-49{width:49px;max-width:100%}
-.u-width-50{width:50px;max-width:100%}
-.u-width-51{width:51px;max-width:100%}
-.u-width-52{width:52px;max-width:100%}
-.u-width-53{width:53px;max-width:100%}
-.u-width-54{width:54px;max-width:100%}
-.u-width-55{width:55px;max-width:100%}
-.u-width-56{width:56px;max-width:100%}
-.u-width-57{width:57px;max-width:100%}
-.u-width-58{width:58px;max-width:100%}
-.u-width-59{width:59px;max-width:100%}
-.u-width-60{width:60px;max-width:100%}
-.u-width-61{width:61px;max-width:100%}
-.u-width-62{width:62px;max-width:100%}
-.u-width-63{width:63px;max-width:100%}
-.u-width-64{width:64px;max-width:100%}
-.u-width-65{width:65px;max-width:100%}
-.u-width-66{width:66px;max-width:100%}
-.u-width-67{width:67px;max-width:100%}
-.u-width-68{width:68px;max-width:100%}
-.u-width-69{width:69px;max-width:100%}
-.u-width-70{width:70px;max-width:100%}
-.u-width-71{width:71px;max-width:100%}
-.u-width-72{width:72px;max-width:100%}
-.u-width-73{width:73px;max-width:100%}
-.u-width-74{width:74px;max-width:100%}
-.u-width-75{width:75px;max-width:100%}
-.u-width-76{width:76px;max-width:100%}
-.u-width-77{width:77px;max-width:100%}
-.u-width-78{width:78px;max-width:100%}
-.u-width-79{width:79px;max-width:100%}
-.u-width-80{width:80px;max-width:100%}
-.u-width-81{width:81px;max-width:100%}
-.u-width-82{width:82px;max-width:100%}
-.u-width-83{width:83px;max-width:100%}
-.u-width-84{width:84px;max-width:100%}
-.u-width-85{width:85px;max-width:100%}
-.u-width-86{width:86px;max-width:100%}
-.u-width-87{width:87px;max-width:100%}
-.u-width-88{width:88px;max-width:100%}
-.u-width-89{width:89px;max-width:100%}
-.u-width-90{width:90px;max-width:100%}
-.u-width-91{width:91px;max-width:100%}
-.u-width-92{width:92px;max-width:100%}
-.u-width-93{width:93px;max-width:100%}
-.u-width-94{width:94px;max-width:100%}
-.u-width-95{width:95px;max-width:100%}
-.u-width-96{width:96px;max-width:100%}
-.u-width-97{width:97px;max-width:100%}
-.u-width-98{width:98px;max-width:100%}
-.u-width-99{width:99px;max-width:100%}
-.u-width-100{width:100px;max-width:100%}
-.u-width-101{width:101px;max-width:100%}
-.u-width-102{width:102px;max-width:100%}
-.u-width-103{width:103px;max-width:100%}
-.u-width-104{width:104px;max-width:100%}
-.u-width-105{width:105px;max-width:100%}
-.u-width-106{width:106px;max-width:100%}
-.u-width-107{width:107px;max-width:100%}
-.u-width-108{width:108px;max-width:100%}
-.u-width-109{width:109px;max-width:100%}
-.u-width-110{width:110px;max-width:100%}
-.u-width-111{width:111px;max-width:100%}
-.u-width-112{width:112px;max-width:100%}
-.u-width-113{width:113px;max-width:100%}
-.u-width-114{width:114px;max-width:100%}
-.u-width-115{width:115px;max-width:100%}
-.u-width-116{width:116px;max-width:100%}
-.u-width-117{width:117px;max-width:100%}
-.u-width-118{width:118px;max-width:100%}
-.u-width-119{width:119px;max-width:100%}
-.u-width-120{width:120px;max-width:100%}
-.u-width-121{width:121px;max-width:100%}
-.u-width-122{width:122px;max-width:100%}
-.u-width-123{width:123px;max-width:100%}
-.u-width-124{width:124px;max-width:100%}
-.u-width-125{width:125px;max-width:100%}
-.u-width-126{width:126px;max-width:100%}
-.u-width-127{width:127px;max-width:100%}
-.u-width-128{width:128px;max-width:100%}
-.u-width-129{width:129px;max-width:100%}
-.u-width-130{width:130px;max-width:100%}
-.u-width-131{width:131px;max-width:100%}
-.u-width-132{width:132px;max-width:100%}
-.u-width-133{width:133px;max-width:100%}
-.u-width-134{width:134px;max-width:100%}
-.u-width-135{width:135px;max-width:100%}
-.u-width-136{width:136px;max-width:100%}
-.u-width-137{width:137px;max-width:100%}
-.u-width-138{width:138px;max-width:100%}
-.u-width-139{width:139px;max-width:100%}
-.u-width-140{width:140px;max-width:100%}
-.u-width-141{width:141px;max-width:100%}
-.u-width-142{width:142px;max-width:100%}
-.u-width-143{width:143px;max-width:100%}
-.u-width-144{width:144px;max-width:100%}
-.u-width-145{width:145px;max-width:100%}
-.u-width-146{width:146px;max-width:100%}
-.u-width-147{width:147px;max-width:100%}
-.u-width-148{width:148px;max-width:100%}
-.u-width-149{width:149px;max-width:100%}
-.u-width-150{width:150px;max-width:100%}
-.u-width-151{width:151px;max-width:100%}
-.u-width-152{width:152px;max-width:100%}
-.u-width-153{width:153px;max-width:100%}
-.u-width-154{width:154px;max-width:100%}
-.u-width-155{width:155px;max-width:100%}
-.u-width-156{width:156px;max-width:100%}
-.u-width-157{width:157px;max-width:100%}
-.u-width-158{width:158px;max-width:100%}
-.u-width-159{width:159px;max-width:100%}
-.u-width-160{width:160px;max-width:100%}
-.u-width-161{width:161px;max-width:100%}
-.u-width-162{width:162px;max-width:100%}
-.u-width-163{width:163px;max-width:100%}
-.u-width-164{width:164px;max-width:100%}
-.u-width-165{width:165px;max-width:100%}
-.u-width-166{width:166px;max-width:100%}
-.u-width-167{width:167px;max-width:100%}
-.u-width-168{width:168px;max-width:100%}
-.u-width-169{width:169px;max-width:100%}
-.u-width-170{width:170px;max-width:100%}
-.u-width-171{width:171px;max-width:100%}
-.u-width-172{width:172px;max-width:100%}
-.u-width-173{width:173px;max-width:100%}
-.u-width-174{width:174px;max-width:100%}
-.u-width-175{width:175px;max-width:100%}
-.u-width-176{width:176px;max-width:100%}
-.u-width-177{width:177px;max-width:100%}
-.u-width-178{width:178px;max-width:100%}
-.u-width-179{width:179px;max-width:100%}
-.u-width-180{width:180px;max-width:100%}
-.u-width-181{width:181px;max-width:100%}
-.u-width-182{width:182px;max-width:100%}
-.u-width-183{width:183px;max-width:100%}
-.u-width-184{width:184px;max-width:100%}
-.u-width-185{width:185px;max-width:100%}
-.u-width-186{width:186px;max-width:100%}
-.u-width-187{width:187px;max-width:100%}
-.u-width-188{width:188px;max-width:100%}
-.u-width-189{width:189px;max-width:100%}
-.u-width-190{width:190px;max-width:100%}
-.u-width-191{width:191px;max-width:100%}
-.u-width-192{width:192px;max-width:100%}
-.u-width-193{width:193px;max-width:100%}
-.u-width-194{width:194px;max-width:100%}
-.u-width-195{width:195px;max-width:100%}
-.u-width-196{width:196px;max-width:100%}
-.u-width-197{width:197px;max-width:100%}
-.u-width-198{width:198px;max-width:100%}
-.u-width-199{width:199px;max-width:100%}
-.u-width-200{width:200px;max-width:100%}
-.u-width-201{width:201px;max-width:100%}
-.u-width-202{width:202px;max-width:100%}
-.u-width-203{width:203px;max-width:100%}
-.u-width-204{width:204px;max-width:100%}
-.u-width-205{width:205px;max-width:100%}
-.u-width-206{width:206px;max-width:100%}
-.u-width-207{width:207px;max-width:100%}
-.u-width-208{width:208px;max-width:100%}
-.u-width-209{width:209px;max-width:100%}
-.u-width-210{width:210px;max-width:100%}
-.u-width-211{width:211px;max-width:100%}
-.u-width-212{width:212px;max-width:100%}
-.u-width-213{width:213px;max-width:100%}
-.u-width-214{width:214px;max-width:100%}
-.u-width-215{width:215px;max-width:100%}
-.u-width-216{width:216px;max-width:100%}
-.u-width-217{width:217px;max-width:100%}
-.u-width-218{width:218px;max-width:100%}
-.u-width-219{width:219px;max-width:100%}
-.u-width-220{width:220px;max-width:100%}
-.u-width-221{width:221px;max-width:100%}
-.u-width-222{width:222px;max-width:100%}
-.u-width-223{width:223px;max-width:100%}
-.u-width-224{width:224px;max-width:100%}
-.u-width-225{width:225px;max-width:100%}
-.u-width-226{width:226px;max-width:100%}
-.u-width-227{width:227px;max-width:100%}
-.u-width-228{width:228px;max-width:100%}
-.u-width-229{width:229px;max-width:100%}
-.u-width-230{width:230px;max-width:100%}
-.u-width-231{width:231px;max-width:100%}
-.u-width-232{width:232px;max-width:100%}
-.u-width-233{width:233px;max-width:100%}
-.u-width-234{width:234px;max-width:100%}
-.u-width-235{width:235px;max-width:100%}
-.u-width-236{width:236px;max-width:100%}
-.u-width-237{width:237px;max-width:100%}
-.u-width-238{width:238px;max-width:100%}
-.u-width-239{width:239px;max-width:100%}
-.u-width-240{width:240px;max-width:100%}
-.u-width-241{width:241px;max-width:100%}
-.u-width-242{width:242px;max-width:100%}
-.u-width-243{width:243px;max-width:100%}
-.u-width-244{width:244px;max-width:100%}
-.u-width-245{width:245px;max-width:100%}
-.u-width-246{width:246px;max-width:100%}
-.u-width-247{width:247px;max-width:100%}
-.u-width-248{width:248px;max-width:100%}
-.u-width-249{width:249px;max-width:100%}
-.u-width-250{width:250px;max-width:100%}
-.u-width-251{width:251px;max-width:100%}
-.u-width-252{width:252px;max-width:100%}
-.u-width-253{width:253px;max-width:100%}
-.u-width-254{width:254px;max-width:100%}
-.u-width-255{width:255px;max-width:100%}
-.u-width-256{width:256px;max-width:100%}
-.u-width-257{width:257px;max-width:100%}
-.u-width-258{width:258px;max-width:100%}
-.u-width-259{width:259px;max-width:100%}
-.u-width-260{width:260px;max-width:100%}
-.u-width-261{width:261px;max-width:100%}
-.u-width-262{width:262px;max-width:100%}
-.u-width-263{width:263px;max-width:100%}
-.u-width-264{width:264px;max-width:100%}
-.u-width-265{width:265px;max-width:100%}
-.u-width-266{width:266px;max-width:100%}
-.u-width-267{width:267px;max-width:100%}
-.u-width-268{width:268px;max-width:100%}
-.u-width-269{width:269px;max-width:100%}
-.u-width-270{width:270px;max-width:100%}
-.u-width-271{width:271px;max-width:100%}
-.u-width-272{width:272px;max-width:100%}
-.u-width-273{width:273px;max-width:100%}
-.u-width-274{width:274px;max-width:100%}
-.u-width-275{width:275px;max-width:100%}
-.u-width-276{width:276px;max-width:100%}
-.u-width-277{width:277px;max-width:100%}
-.u-width-278{width:278px;max-width:100%}
-.u-width-279{width:279px;max-width:100%}
-.u-width-280{width:280px;max-width:100%}
-.u-width-281{width:281px;max-width:100%}
-.u-width-282{width:282px;max-width:100%}
-.u-width-283{width:283px;max-width:100%}
-.u-width-284{width:284px;max-width:100%}
-.u-width-285{width:285px;max-width:100%}
-.u-width-286{width:286px;max-width:100%}
-.u-width-287{width:287px;max-width:100%}
-.u-width-288{width:288px;max-width:100%}
-.u-width-289{width:289px;max-width:100%}
-.u-width-290{width:290px;max-width:100%}
-.u-width-291{width:291px;max-width:100%}
-.u-width-292{width:292px;max-width:100%}
-.u-width-293{width:293px;max-width:100%}
-.u-width-294{width:294px;max-width:100%}
-.u-width-295{width:295px;max-width:100%}
-.u-width-296{width:296px;max-width:100%}
-.u-width-297{width:297px;max-width:100%}
-.u-width-298{width:298px;max-width:100%}
-.u-width-299{width:299px;max-width:100%}
-.u-width-300{width:300px;max-width:100%}
-.u-width-301{width:301px;max-width:100%}
-.u-width-302{width:302px;max-width:100%}
-.u-width-303{width:303px;max-width:100%}
-.u-width-304{width:304px;max-width:100%}
-.u-width-305{width:305px;max-width:100%}
-.u-width-306{width:306px;max-width:100%}
-.u-width-307{width:307px;max-width:100%}
-.u-width-308{width:308px;max-width:100%}
-.u-width-309{width:309px;max-width:100%}
-.u-width-310{width:310px;max-width:100%}
-.u-width-311{width:311px;max-width:100%}
-.u-width-312{width:312px;max-width:100%}
-.u-width-313{width:313px;max-width:100%}
-.u-width-314{width:314px;max-width:100%}
-.u-width-315{width:315px;max-width:100%}
-.u-width-316{width:316px;max-width:100%}
-.u-width-317{width:317px;max-width:100%}
-.u-width-318{width:318px;max-width:100%}
-.u-width-319{width:319px;max-width:100%}
-.u-width-320{width:320px;max-width:100%}
-.u-width-321{width:321px;max-width:100%}
-.u-width-322{width:322px;max-width:100%}
-.u-width-323{width:323px;max-width:100%}
-.u-width-324{width:324px;max-width:100%}
-.u-width-325{width:325px;max-width:100%}
-.u-width-326{width:326px;max-width:100%}
-.u-width-327{width:327px;max-width:100%}
-.u-width-328{width:328px;max-width:100%}
-.u-width-329{width:329px;max-width:100%}
-.u-width-330{width:330px;max-width:100%}
-.u-width-331{width:331px;max-width:100%}
-.u-width-332{width:332px;max-width:100%}
-.u-width-333{width:333px;max-width:100%}
-.u-width-334{width:334px;max-width:100%}
-.u-width-335{width:335px;max-width:100%}
-.u-width-336{width:336px;max-width:100%}
-.u-width-337{width:337px;max-width:100%}
-.u-width-338{width:338px;max-width:100%}
-.u-width-339{width:339px;max-width:100%}
-.u-width-340{width:340px;max-width:100%}
-.u-width-341{width:341px;max-width:100%}
-.u-width-342{width:342px;max-width:100%}
-.u-width-343{width:343px;max-width:100%}
-.u-width-344{width:344px;max-width:100%}
-.u-width-345{width:345px;max-width:100%}
-.u-width-346{width:346px;max-width:100%}
-.u-width-347{width:347px;max-width:100%}
-.u-width-348{width:348px;max-width:100%}
-.u-width-349{width:349px;max-width:100%}
-.u-width-350{width:350px;max-width:100%}
-.u-width-351{width:351px;max-width:100%}
-.u-width-352{width:352px;max-width:100%}
-.u-width-353{width:353px;max-width:100%}
-.u-width-354{width:354px;max-width:100%}
-.u-width-355{width:355px;max-width:100%}
-.u-width-356{width:356px;max-width:100%}
-.u-width-357{width:357px;max-width:100%}
-.u-width-358{width:358px;max-width:100%}
-.u-width-359{width:359px;max-width:100%}
-.u-width-360{width:360px;max-width:100%}
-.u-width-361{width:361px;max-width:100%}
-.u-width-362{width:362px;max-width:100%}
-.u-width-363{width:363px;max-width:100%}
-.u-width-364{width:364px;max-width:100%}
-.u-width-365{width:365px;max-width:100%}
-.u-width-366{width:366px;max-width:100%}
-.u-width-367{width:367px;max-width:100%}
-.u-width-368{width:368px;max-width:100%}
-.u-width-369{width:369px;max-width:100%}
-.u-width-370{width:370px;max-width:100%}
-.u-width-371{width:371px;max-width:100%}
-.u-width-372{width:372px;max-width:100%}
-.u-width-373{width:373px;max-width:100%}
-.u-width-374{width:374px;max-width:100%}
-.u-width-375{width:375px;max-width:100%}
-.u-width-376{width:376px;max-width:100%}
-.u-width-377{width:377px;max-width:100%}
-.u-width-378{width:378px;max-width:100%}
-.u-width-379{width:379px;max-width:100%}
-.u-width-380{width:380px;max-width:100%}
-.u-width-381{width:381px;max-width:100%}
-.u-width-382{width:382px;max-width:100%}
-.u-width-383{width:383px;max-width:100%}
-.u-width-384{width:384px;max-width:100%}
-.u-width-385{width:385px;max-width:100%}
-.u-width-386{width:386px;max-width:100%}
-.u-width-387{width:387px;max-width:100%}
-.u-width-388{width:388px;max-width:100%}
-.u-width-389{width:389px;max-width:100%}
-.u-width-390{width:390px;max-width:100%}
-.u-width-391{width:391px;max-width:100%}
-.u-width-392{width:392px;max-width:100%}
-.u-width-393{width:393px;max-width:100%}
-.u-width-394{width:394px;max-width:100%}
-.u-width-395{width:395px;max-width:100%}
-.u-width-396{width:396px;max-width:100%}
-.u-width-397{width:397px;max-width:100%}
-.u-width-398{width:398px;max-width:100%}
-.u-width-399{width:399px;max-width:100%}
-.u-width-400{width:400px;max-width:100%}
-.u-min-height-1{min-height:1px}
-.u-min-height-2{min-height:2px}
-.u-min-height-3{min-height:3px}
-.u-min-height-4{min-height:4px}
-.u-min-height-5{min-height:5px}
-.u-min-height-6{min-height:6px}
-.u-min-height-7{min-height:7px}
-.u-min-height-8{min-height:8px}
-.u-min-height-9{min-height:9px}
-.u-min-height-10{min-height:10px}
-.u-min-height-11{min-height:11px}
-.u-min-height-12{min-height:12px}
-.u-min-height-13{min-height:13px}
-.u-min-height-14{min-height:14px}
-.u-min-height-15{min-height:15px}
-.u-min-height-16{min-height:16px}
-.u-min-height-17{min-height:17px}
-.u-min-height-18{min-height:18px}
-.u-min-height-19{min-height:19px}
-.u-min-height-20{min-height:20px}
-.u-min-height-21{min-height:21px}
-.u-min-height-22{min-height:22px}
-.u-min-height-23{min-height:23px}
-.u-min-height-24{min-height:24px}
-.u-min-height-25{min-height:25px}
-.u-min-height-26{min-height:26px}
-.u-min-height-27{min-height:27px}
-.u-min-height-28{min-height:28px}
-.u-min-height-29{min-height:29px}
-.u-min-height-30{min-height:30px}
-.u-min-height-31{min-height:31px}
-.u-min-height-32{min-height:32px}
-.u-min-height-33{min-height:33px}
-.u-min-height-34{min-height:34px}
-.u-min-height-35{min-height:35px}
-.u-min-height-36{min-height:36px}
-.u-min-height-37{min-height:37px}
-.u-min-height-38{min-height:38px}
-.u-min-height-39{min-height:39px}
-.u-min-height-40{min-height:40px}
-.u-min-height-41{min-height:41px}
-.u-min-height-42{min-height:42px}
-.u-min-height-43{min-height:43px}
-.u-min-height-44{min-height:44px}
-.u-min-height-45{min-height:45px}
-.u-min-height-46{min-height:46px}
-.u-min-height-47{min-height:47px}
-.u-min-height-48{min-height:48px}
-.u-min-height-49{min-height:49px}
-.u-min-height-50{min-height:50px}
-.u-min-height-51{min-height:51px}
-.u-min-height-52{min-height:52px}
-.u-min-height-53{min-height:53px}
-.u-min-height-54{min-height:54px}
-.u-min-height-55{min-height:55px}
-.u-min-height-56{min-height:56px}
-.u-min-height-57{min-height:57px}
-.u-min-height-58{min-height:58px}
-.u-min-height-59{min-height:59px}
-.u-min-height-60{min-height:60px}
-.u-min-height-61{min-height:61px}
-.u-min-height-62{min-height:62px}
-.u-min-height-63{min-height:63px}
-.u-min-height-64{min-height:64px}
-.u-min-height-65{min-height:65px}
-.u-min-height-66{min-height:66px}
-.u-min-height-67{min-height:67px}
-.u-min-height-68{min-height:68px}
-.u-min-height-69{min-height:69px}
-.u-min-height-70{min-height:70px}
-.u-min-height-71{min-height:71px}
-.u-min-height-72{min-height:72px}
-.u-min-height-73{min-height:73px}
-.u-min-height-74{min-height:74px}
-.u-min-height-75{min-height:75px}
-.u-min-height-76{min-height:76px}
-.u-min-height-77{min-height:77px}
-.u-min-height-78{min-height:78px}
-.u-min-height-79{min-height:79px}
-.u-min-height-80{min-height:80px}
-.u-min-height-81{min-height:81px}
-.u-min-height-82{min-height:82px}
-.u-min-height-83{min-height:83px}
-.u-min-height-84{min-height:84px}
-.u-min-height-85{min-height:85px}
-.u-min-height-86{min-height:86px}
-.u-min-height-87{min-height:87px}
-.u-min-height-88{min-height:88px}
-.u-min-height-89{min-height:89px}
-.u-min-height-90{min-height:90px}
-.u-min-height-91{min-height:91px}
-.u-min-height-92{min-height:92px}
-.u-min-height-93{min-height:93px}
-.u-min-height-94{min-height:94px}
-.u-min-height-95{min-height:95px}
-.u-min-height-96{min-height:96px}
-.u-min-height-97{min-height:97px}
-.u-min-height-98{min-height:98px}
-.u-min-height-99{min-height:99px}
-.u-min-height-100{min-height:100px}
-.u-min-height-101{min-height:101px}
-.u-min-height-102{min-height:102px}
-.u-min-height-103{min-height:103px}
-.u-min-height-104{min-height:104px}
-.u-min-height-105{min-height:105px}
-.u-min-height-106{min-height:106px}
-.u-min-height-107{min-height:107px}
-.u-min-height-108{min-height:108px}
-.u-min-height-109{min-height:109px}
-.u-min-height-110{min-height:110px}
-.u-min-height-111{min-height:111px}
-.u-min-height-112{min-height:112px}
-.u-min-height-113{min-height:113px}
-.u-min-height-114{min-height:114px}
-.u-min-height-115{min-height:115px}
-.u-min-height-116{min-height:116px}
-.u-min-height-117{min-height:117px}
-.u-min-height-118{min-height:118px}
-.u-min-height-119{min-height:119px}
-.u-min-height-120{min-height:120px}
-.u-min-height-121{min-height:121px}
-.u-min-height-122{min-height:122px}
-.u-min-height-123{min-height:123px}
-.u-min-height-124{min-height:124px}
-.u-min-height-125{min-height:125px}
-.u-min-height-126{min-height:126px}
-.u-min-height-127{min-height:127px}
-.u-min-height-128{min-height:128px}
-.u-min-height-129{min-height:129px}
-.u-min-height-130{min-height:130px}
-.u-min-height-131{min-height:131px}
-.u-min-height-132{min-height:132px}
-.u-min-height-133{min-height:133px}
-.u-min-height-134{min-height:134px}
-.u-min-height-135{min-height:135px}
-.u-min-height-136{min-height:136px}
-.u-min-height-137{min-height:137px}
-.u-min-height-138{min-height:138px}
-.u-min-height-139{min-height:139px}
-.u-min-height-140{min-height:140px}
-.u-min-height-141{min-height:141px}
-.u-min-height-142{min-height:142px}
-.u-min-height-143{min-height:143px}
-.u-min-height-144{min-height:144px}
-.u-min-height-145{min-height:145px}
-.u-min-height-146{min-height:146px}
-.u-min-height-147{min-height:147px}
-.u-min-height-148{min-height:148px}
-.u-min-height-149{min-height:149px}
-.u-min-height-150{min-height:150px}
-.u-min-height-151{min-height:151px}
-.u-min-height-152{min-height:152px}
-.u-min-height-153{min-height:153px}
-.u-min-height-154{min-height:154px}
-.u-min-height-155{min-height:155px}
-.u-min-height-156{min-height:156px}
-.u-min-height-157{min-height:157px}
-.u-min-height-158{min-height:158px}
-.u-min-height-159{min-height:159px}
-.u-min-height-160{min-height:160px}
-.u-min-height-161{min-height:161px}
-.u-min-height-162{min-height:162px}
-.u-min-height-163{min-height:163px}
-.u-min-height-164{min-height:164px}
-.u-min-height-165{min-height:165px}
-.u-min-height-166{min-height:166px}
-.u-min-height-167{min-height:167px}
-.u-min-height-168{min-height:168px}
-.u-min-height-169{min-height:169px}
-.u-min-height-170{min-height:170px}
-.u-min-height-171{min-height:171px}
-.u-min-height-172{min-height:172px}
-.u-min-height-173{min-height:173px}
-.u-min-height-174{min-height:174px}
-.u-min-height-175{min-height:175px}
-.u-min-height-176{min-height:176px}
-.u-min-height-177{min-height:177px}
-.u-min-height-178{min-height:178px}
-.u-min-height-179{min-height:179px}
-.u-min-height-180{min-height:180px}
-.u-min-height-181{min-height:181px}
-.u-min-height-182{min-height:182px}
-.u-min-height-183{min-height:183px}
-.u-min-height-184{min-height:184px}
-.u-min-height-185{min-height:185px}
-.u-min-height-186{min-height:186px}
-.u-min-height-187{min-height:187px}
-.u-min-height-188{min-height:188px}
-.u-min-height-189{min-height:189px}
-.u-min-height-190{min-height:190px}
-.u-min-height-191{min-height:191px}
-.u-min-height-192{min-height:192px}
-.u-min-height-193{min-height:193px}
-.u-min-height-194{min-height:194px}
-.u-min-height-195{min-height:195px}
-.u-min-height-196{min-height:196px}
-.u-min-height-197{min-height:197px}
-.u-min-height-198{min-height:198px}
-.u-min-height-199{min-height:199px}
-.u-min-height-200{min-height:200px}
-.u-min-height-201{min-height:201px}
-.u-min-height-202{min-height:202px}
-.u-min-height-203{min-height:203px}
-.u-min-height-204{min-height:204px}
-.u-min-height-205{min-height:205px}
-.u-min-height-206{min-height:206px}
-.u-min-height-207{min-height:207px}
-.u-min-height-208{min-height:208px}
-.u-min-height-209{min-height:209px}
-.u-min-height-210{min-height:210px}
-.u-min-height-211{min-height:211px}
-.u-min-height-212{min-height:212px}
-.u-min-height-213{min-height:213px}
-.u-min-height-214{min-height:214px}
-.u-min-height-215{min-height:215px}
-.u-min-height-216{min-height:216px}
-.u-min-height-217{min-height:217px}
-.u-min-height-218{min-height:218px}
-.u-min-height-219{min-height:219px}
-.u-min-height-220{min-height:220px}
-.u-min-height-221{min-height:221px}
-.u-min-height-222{min-height:222px}
-.u-min-height-223{min-height:223px}
-.u-min-height-224{min-height:224px}
-.u-min-height-225{min-height:225px}
-.u-min-height-226{min-height:226px}
-.u-min-height-227{min-height:227px}
-.u-min-height-228{min-height:228px}
-.u-min-height-229{min-height:229px}
-.u-min-height-230{min-height:230px}
-.u-min-height-231{min-height:231px}
-.u-min-height-232{min-height:232px}
-.u-min-height-233{min-height:233px}
-.u-min-height-234{min-height:234px}
-.u-min-height-235{min-height:235px}
-.u-min-height-236{min-height:236px}
-.u-min-height-237{min-height:237px}
-.u-min-height-238{min-height:238px}
-.u-min-height-239{min-height:239px}
-.u-min-height-240{min-height:240px}
-.u-min-height-241{min-height:241px}
-.u-min-height-242{min-height:242px}
-.u-min-height-243{min-height:243px}
-.u-min-height-244{min-height:244px}
-.u-min-height-245{min-height:245px}
-.u-min-height-246{min-height:246px}
-.u-min-height-247{min-height:247px}
-.u-min-height-248{min-height:248px}
-.u-min-height-249{min-height:249px}
-.u-min-height-250{min-height:250px}
-.u-min-height-251{min-height:251px}
-.u-min-height-252{min-height:252px}
-.u-min-height-253{min-height:253px}
-.u-min-height-254{min-height:254px}
-.u-min-height-255{min-height:255px}
-.u-min-height-256{min-height:256px}
-.u-min-height-257{min-height:257px}
-.u-min-height-258{min-height:258px}
-.u-min-height-259{min-height:259px}
-.u-min-height-260{min-height:260px}
-.u-min-height-261{min-height:261px}
-.u-min-height-262{min-height:262px}
-.u-min-height-263{min-height:263px}
-.u-min-height-264{min-height:264px}
-.u-min-height-265{min-height:265px}
-.u-min-height-266{min-height:266px}
-.u-min-height-267{min-height:267px}
-.u-min-height-268{min-height:268px}
-.u-min-height-269{min-height:269px}
-.u-min-height-270{min-height:270px}
-.u-min-height-271{min-height:271px}
-.u-min-height-272{min-height:272px}
-.u-min-height-273{min-height:273px}
-.u-min-height-274{min-height:274px}
-.u-min-height-275{min-height:275px}
-.u-min-height-276{min-height:276px}
-.u-min-height-277{min-height:277px}
-.u-min-height-278{min-height:278px}
-.u-min-height-279{min-height:279px}
-.u-min-height-280{min-height:280px}
-.u-min-height-281{min-height:281px}
-.u-min-height-282{min-height:282px}
-.u-min-height-283{min-height:283px}
-.u-min-height-284{min-height:284px}
-.u-min-height-285{min-height:285px}
-.u-min-height-286{min-height:286px}
-.u-min-height-287{min-height:287px}
-.u-min-height-288{min-height:288px}
-.u-min-height-289{min-height:289px}
-.u-min-height-290{min-height:290px}
-.u-min-height-291{min-height:291px}
-.u-min-height-292{min-height:292px}
-.u-min-height-293{min-height:293px}
-.u-min-height-294{min-height:294px}
-.u-min-height-295{min-height:295px}
-.u-min-height-296{min-height:296px}
-.u-min-height-297{min-height:297px}
-.u-min-height-298{min-height:298px}
-.u-min-height-299{min-height:299px}
-.u-min-height-300{min-height:300px}
-.u-min-height-301{min-height:301px}
-.u-min-height-302{min-height:302px}
-.u-min-height-303{min-height:303px}
-.u-min-height-304{min-height:304px}
-.u-min-height-305{min-height:305px}
-.u-min-height-306{min-height:306px}
-.u-min-height-307{min-height:307px}
-.u-min-height-308{min-height:308px}
-.u-min-height-309{min-height:309px}
-.u-min-height-310{min-height:310px}
-.u-min-height-311{min-height:311px}
-.u-min-height-312{min-height:312px}
-.u-min-height-313{min-height:313px}
-.u-min-height-314{min-height:314px}
-.u-min-height-315{min-height:315px}
-.u-min-height-316{min-height:316px}
-.u-min-height-317{min-height:317px}
-.u-min-height-318{min-height:318px}
-.u-min-height-319{min-height:319px}
-.u-min-height-320{min-height:320px}
-.u-min-height-321{min-height:321px}
-.u-min-height-322{min-height:322px}
-.u-min-height-323{min-height:323px}
-.u-min-height-324{min-height:324px}
-.u-min-height-325{min-height:325px}
-.u-min-height-326{min-height:326px}
-.u-min-height-327{min-height:327px}
-.u-min-height-328{min-height:328px}
-.u-min-height-329{min-height:329px}
-.u-min-height-330{min-height:330px}
-.u-min-height-331{min-height:331px}
-.u-min-height-332{min-height:332px}
-.u-min-height-333{min-height:333px}
-.u-min-height-334{min-height:334px}
-.u-min-height-335{min-height:335px}
-.u-min-height-336{min-height:336px}
-.u-min-height-337{min-height:337px}
-.u-min-height-338{min-height:338px}
-.u-min-height-339{min-height:339px}
-.u-min-height-340{min-height:340px}
-.u-min-height-341{min-height:341px}
-.u-min-height-342{min-height:342px}
-.u-min-height-343{min-height:343px}
-.u-min-height-344{min-height:344px}
-.u-min-height-345{min-height:345px}
-.u-min-height-346{min-height:346px}
-.u-min-height-347{min-height:347px}
-.u-min-height-348{min-height:348px}
-.u-min-height-349{min-height:349px}
-.u-min-height-350{min-height:350px}
-.u-min-height-351{min-height:351px}
-.u-min-height-352{min-height:352px}
-.u-min-height-353{min-height:353px}
-.u-min-height-354{min-height:354px}
-.u-min-height-355{min-height:355px}
-.u-min-height-356{min-height:356px}
-.u-min-height-357{min-height:357px}
-.u-min-height-358{min-height:358px}
-.u-min-height-359{min-height:359px}
-.u-min-height-360{min-height:360px}
-.u-min-height-361{min-height:361px}
-.u-min-height-362{min-height:362px}
-.u-min-height-363{min-height:363px}
-.u-min-height-364{min-height:364px}
-.u-min-height-365{min-height:365px}
-.u-min-height-366{min-height:366px}
-.u-min-height-367{min-height:367px}
-.u-min-height-368{min-height:368px}
-.u-min-height-369{min-height:369px}
-.u-min-height-370{min-height:370px}
-.u-min-height-371{min-height:371px}
-.u-min-height-372{min-height:372px}
-.u-min-height-373{min-height:373px}
-.u-min-height-374{min-height:374px}
-.u-min-height-375{min-height:375px}
-.u-min-height-376{min-height:376px}
-.u-min-height-377{min-height:377px}
-.u-min-height-378{min-height:378px}
-.u-min-height-379{min-height:379px}
-.u-min-height-380{min-height:380px}
-.u-min-height-381{min-height:381px}
-.u-min-height-382{min-height:382px}
-.u-min-height-383{min-height:383px}
-.u-min-height-384{min-height:384px}
-.u-min-height-385{min-height:385px}
-.u-min-height-386{min-height:386px}
-.u-min-height-387{min-height:387px}
-.u-min-height-388{min-height:388px}
-.u-min-height-389{min-height:389px}
-.u-min-height-390{min-height:390px}
-.u-min-height-391{min-height:391px}
-.u-min-height-392{min-height:392px}
-.u-min-height-393{min-height:393px}
-.u-min-height-394{min-height:394px}
-.u-min-height-395{min-height:395px}
-.u-min-height-396{min-height:396px}
-.u-min-height-397{min-height:397px}
-.u-min-height-398{min-height:398px}
-.u-min-height-399{min-height:399px}
-.u-min-height-400{min-height:400px}
-.u-opacity-1{opacity:0.005}
-.u-opacity-2{opacity:0.010}
-.u-opacity-3{opacity:0.015}
-.u-opacity-4{opacity:0.020}
-.u-opacity-5{opacity:0.025}
-.u-opacity-6{opacity:0.030}
-.u-opacity-7{opacity:0.035}
-.u-opacity-8{opacity:0.040}
-.u-opacity-9{opacity:0.045}
-.u-opacity-10{opacity:0.050}
-.u-opacity-11{opacity:0.055}
-.u-opacity-12{opacity:0.060}
-.u-opacity-13{opacity:0.065}
-.u-opacity-14{opacity:0.070}
-.u-opacity-15{opacity:0.075}
-.u-opacity-16{opacity:0.080}
-.u-opacity-17{opacity:0.085}
-.u-opacity-18{opacity:0.090}
-.u-opacity-19{opacity:0.095}
-.u-opacity-20{opacity:0.100}
-.u-opacity-21{opacity:0.105}
-.u-opacity-22{opacity:0.110}
-.u-opacity-23{opacity:0.115}
-.u-opacity-24{opacity:0.120}
-.u-opacity-25{opacity:0.125}
-.u-opacity-26{opacity:0.130}
-.u-opacity-27{opacity:0.135}
-.u-opacity-28{opacity:0.140}
-.u-opacity-29{opacity:0.145}
-.u-opacity-30{opacity:0.150}
-.u-opacity-31{opacity:0.155}
-.u-opacity-32{opacity:0.160}
-.u-opacity-33{opacity:0.165}
-.u-opacity-34{opacity:0.170}
-.u-opacity-35{opacity:0.175}
-.u-opacity-36{opacity:0.180}
-.u-opacity-37{opacity:0.185}
-.u-opacity-38{opacity:0.190}
-.u-opacity-39{opacity:0.195}
-.u-opacity-40{opacity:0.200}
-.u-opacity-41{opacity:0.205}
-.u-opacity-42{opacity:0.210}
-.u-opacity-43{opacity:0.215}
-.u-opacity-44{opacity:0.220}
-.u-opacity-45{opacity:0.225}
-.u-opacity-46{opacity:0.230}
-.u-opacity-47{opacity:0.235}
-.u-opacity-48{opacity:0.240}
-.u-opacity-49{opacity:0.245}
-.u-opacity-50{opacity:0.250}
-.u-opacity-51{opacity:0.255}
-.u-opacity-52{opacity:0.260}
-.u-opacity-53{opacity:0.265}
-.u-opacity-54{opacity:0.270}
-.u-opacity-55{opacity:0.275}
-.u-opacity-56{opacity:0.280}
-.u-opacity-57{opacity:0.285}
-.u-opacity-58{opacity:0.290}
-.u-opacity-59{opacity:0.295}
-.u-opacity-60{opacity:0.300}
-.u-opacity-61{opacity:0.305}
-.u-opacity-62{opacity:0.310}
-.u-opacity-63{opacity:0.315}
-.u-opacity-64{opacity:0.320}
-.u-opacity-65{opacity:0.325}
-.u-opacity-66{opacity:0.330}
-.u-opacity-67{opacity:0.335}
-.u-opacity-68{opacity:0.340}
-.u-opacity-69{opacity:0.345}
-.u-opacity-70{opacity:0.350}
-.u-opacity-71{opacity:0.355}
-.u-opacity-72{opacity:0.360}
-.u-opacity-73{opacity:0.365}
-.u-opacity-74{opacity:0.370}
-.u-opacity-75{opacity:0.375}
-.u-opacity-76{opacity:0.380}
-.u-opacity-77{opacity:0.385}
-.u-opacity-78{opacity:0.390}
-.u-opacity-79{opacity:0.395}
-.u-opacity-80{opacity:0.400}
-.u-opacity-81{opacity:0.405}
-.u-opacity-82{opacity:0.410}
-.u-opacity-83{opacity:0.415}
-.u-opacity-84{opacity:0.420}
-.u-opacity-85{opacity:0.425}
-.u-opacity-86{opacity:0.430}
-.u-opacity-87{opacity:0.435}
-.u-opacity-88{opacity:0.440}
-.u-opacity-89{opacity:0.445}
-.u-opacity-90{opacity:0.450}
-.u-opacity-91{opacity:0.455}
-.u-opacity-92{opacity:0.460}
-.u-opacity-93{opacity:0.465}
-.u-opacity-94{opacity:0.470}
-.u-opacity-95{opacity:0.475}
-.u-opacity-96{opacity:0.480}
-.u-opacity-97{opacity:0.485}
-.u-opacity-98{opacity:0.490}
-.u-opacity-99{opacity:0.495}
-.u-opacity-100{opacity:0.500}
-.u-opacity-101{opacity:0.505}
-.u-opacity-102{opacity:0.510}
-.u-opacity-103{opacity:0.515}
-.u-opacity-104{opacity:0.520}
-.u-opacity-105{opacity:0.525}
-.u-opacity-106{opacity:0.530}
-.u-opacity-107{opacity:0.535}
-.u-opacity-108{opacity:0.540}
-.u-opacity-109{opacity:0.545}
-.u-opacity-110{opacity:0.550}
-.u-opacity-111{opacity:0.555}
-.u-opacity-112{opacity:0.560}
-.u-opacity-113{opacity:0.565}
-.u-opacity-114{opacity:0.570}
-.u-opacity-115{opacity:0.575}
-.u-opacity-116{opacity:0.580}
-.u-opacity-117{opacity:0.585}
-.u-opacity-118{opacity:0.590}
-.u-opacity-119{opacity:0.595}
-.u-opacity-120{opacity:0.600}
-.u-opacity-121{opacity:0.605}
-.u-opacity-122{opacity:0.610}
-.u-opacity-123{opacity:0.615}
-.u-opacity-124{opacity:0.620}
-.u-opacity-125{opacity:0.625}
-.u-opacity-126{opacity:0.630}
-.u-opacity-127{opacity:0.635}
-.u-opacity-128{opacity:0.640}
-.u-opacity-129{opacity:0.645}
-.u-opacity-130{opacity:0.650}
-.u-opacity-131{opacity:0.655}
-.u-opacity-132{opacity:0.660}
-.u-opacity-133{opacity:0.665}
-.u-opacity-134{opacity:0.670}
-.u-opacity-135{opacity:0.675}
-.u-opacity-136{opacity:0.680}
-.u-opacity-137{opacity:0.685}
-.u-opacity-138{opacity:0.690}
-.u-opacity-139{opacity:0.695}
-.u-opacity-140{opacity:0.700}
-.u-opacity-141{opacity:0.705}
-.u-opacity-142{opacity:0.710}
-.u-opacity-143{opacity:0.715}
-.u-opacity-144{opacity:0.720}
-.u-opacity-145{opacity:0.725}
-.u-opacity-146{opacity:0.730}
-.u-opacity-147{opacity:0.735}
-.u-opacity-148{opacity:0.740}
-.u-opacity-149{opacity:0.745}
-.u-opacity-150{opacity:0.750}
-.u-opacity-151{opacity:0.755}
-.u-opacity-152{opacity:0.760}
-.u-opacity-153{opacity:0.765}
-.u-opacity-154{opacity:0.770}
-.u-opacity-155{opacity:0.775}
-.u-opacity-156{opacity:0.780}
-.u-opacity-157{opacity:0.785}
-.u-opacity-158{opacity:0.790}
-.u-opacity-159{opacity:0.795}
-.u-opacity-160{opacity:0.800}
-.u-opacity-161{opacity:0.805}
-.u-opacity-162{opacity:0.810}
-.u-opacity-163{opacity:0.815}
-.u-opacity-164{opacity:0.820}
-.u-opacity-165{opacity:0.825}
-.u-opacity-166{opacity:0.830}
-.u-opacity-167{opacity:0.835}
-.u-opacity-168{opacity:0.840}
-.u-opacity-169{opacity:0.845}
-.u-opacity-170{opacity:0.850}
-.u-opacity-171{opacity:0.855}
-.u-opacity-172{opacity:0.860}
-.u-opacity-173{opacity:0.865}
-.u-opacity-174{opacity:0.870}
-.u-opacity-175{opacity:0.875}
-.u-opacity-176{opacity:0.880}
-.u-opacity-177{opacity:0.885}
-.u-opacity-178{opacity:0.890}
-.u-opacity-179{opacity:0.895}
-.u-opacity-180{opacity:0.900}
-.u-opacity-181{opacity:0.905}
-.u-opacity-182{opacity:0.910}
-.u-opacity-183{opacity:0.915}
-.u-opacity-184{opacity:0.920}
-.u-opacity-185{opacity:0.925}
-.u-opacity-186{opacity:0.930}
-.u-opacity-187{opacity:0.935}
-.u-opacity-188{opacity:0.940}
-.u-opacity-189{opacity:0.945}
-.u-opacity-190{opacity:0.950}
-.u-opacity-191{opacity:0.955}
-.u-opacity-192{opacity:0.960}
-.u-opacity-193{opacity:0.965}
-.u-opacity-194{opacity:0.970}
-.u-opacity-195{opacity:0.975}
-.u-opacity-196{opacity:0.980}
-.u-opacity-197{opacity:0.985}
-.u-opacity-198{opacity:0.990}
-.u-opacity-199{opacity:0.995}
-.u-opacity-200{opacity:1.000}
-.u-z-1{z-index:1}
-.u-z-2{z-index:2}
-.u-z-3{z-index:3}
-.u-z-4{z-index:4}
-.u-z-5{z-index:5}
-.u-z-6{z-index:6}
-.u-z-7{z-index:7}
-.u-z-8{z-index:8}
-.u-z-9{z-index:9}
-.u-z-10{z-index:10}
-.u-z-11{z-index:11}
-.u-z-12{z-index:12}
-.u-z-13{z-index:13}
-.u-z-14{z-index:14}
-.u-z-15{z-index:15}
-.u-z-16{z-index:16}
-.u-z-17{z-index:17}
-.u-z-18{z-index:18}
-.u-z-19{z-index:19}
-.u-z-20{z-index:20}
-.u-z-21{z-index:21}
-.u-z-22{z-index:22}
-.u-z-23{z-index:23}
-.u-z-24{z-index:24}
-.u-z-25{z-index:25}
-.u-z-26{z-index:26}
-.u-z-27{z-index:27}
-.u-z-28{z-index:28}
-.u-z-29{z-index:29}
-.u-z-30{z-index:30}
-.u-z-31{z-index:31}
-.u-z-32{z-index:32}
-.u-z-33{z-index:33}
-.u-z-34{z-index:34}
-.u-z-35{z-index:35}
-.u-z-36{z-index:36}
-.u-z-37{z-index:37}
-.u-z-38{z-index:38}
-.u-z-39{z-index:39}
-.u-z-40{z-index:40}
-.u-z-41{z-index:41}
-.u-z-42{z-index:42}
-.u-z-43{z-index:43}
-.u-z-44{z-index:44}
-.u-z-45{z-index:45}
-.u-z-46{z-index:46}
-.u-z-47{z-index:47}
-.u-z-48{z-index:48}
-.u-z-49{z-index:49}
-.u-z-50{z-index:50}
-.u-z-51{z-index:51}
-.u-z-52{z-index:52}
-.u-z-53{z-index:53}
-.u-z-54{z-index:54}
-.u-z-55{z-index:55}
-.u-z-56{z-index:56}
-.u-z-57{z-index:57}
-.u-z-58{z-index:58}
-.u-z-59{z-index:59}
-.u-z-60{z-index:60}
-.u-z-61{z-index:61}
-.u-z-62{z-index:62}
-.u-z-63{z-index:63}
-.u-z-64{z-index:64}
-.u-z-65{z-index:65}
-.u-z-66{z-index:66}
-.u-z-67{z-index:67}
-.u-z-68{z-index:68}
-.u-z-69{z-index:69}
-.u-z-70{z-index:70}
-.u-z-71{z-index:71}
-.u-z-72{z-index:72}
-.u-z-73{z-index:73}
-.u-z-74{z-index:74}
-.u-z-75{z-index:75}
-.u-z-76{z-index:76}
-.u-z-77{z-index:77}
-.u-z-78{z-index:78}
-.u-z-79{z-index:79}
-.u-z-80{z-index:80}
-.u-z-81{z-index:81}
-.u-z-82{z-index:82}
-.u-z-83{z-index:83}
-.u-z-84{z-index:84}
-.u-z-85{z-index:85}
-.u-z-86{z-index:86}
-.u-z-87{z-index:87}
-.u-z-88{z-index:88}
-.u-z-89{z-index:89}
-.u-z-90{z-index:90}
-.u-z-91{z-index:91}
-.u-z-92{z-index:92}
-.u-z-93{z-index:93}
-.u-z-94{z-index:94}
-.u-z-95{z-index:95}
-.u-z-96{z-index:96}
-.u-z-97{z-index:97}
-.u-z-98{z-index:98}
-.u-z-99{z-index:99}
-.u-z-100{z-index:100}
-.u-z-101{z-index:101}
-.u-z-102{z-index:102}
-.u-z-103{z-index:103}
-.u-z-104{z-index:104}
-.u-z-105{z-index:105}
-.u-z-106{z-index:106}
-.u-z-107{z-index:107}
-.u-z-108{z-index:108}
-.u-z-109{z-index:109}
-.u-z-110{z-index:110}
-.u-z-111{z-index:111}
-.u-z-112{z-index:112}
-.u-z-113{z-index:113}
-.u-z-114{z-index:114}
-.u-z-115{z-index:115}
-.u-z-116{z-index:116}
-.u-z-117{z-index:117}
-.u-z-118{z-index:118}
-.u-z-119{z-index:119}
-.u-z-120{z-index:120}
-.u-z-121{z-index:121}
-.u-z-122{z-index:122}
-.u-z-123{z-index:123}
-.u-z-124{z-index:124}
-.u-z-125{z-index:125}
-.u-z-126{z-index:126}
-.u-z-127{z-index:127}
-.u-z-128{z-index:128}
-.u-z-129{z-index:129}
-.u-z-130{z-index:130}
-.u-z-131{z-index:131}
-.u-z-132{z-index:132}
-.u-z-133{z-index:133}
-.u-z-134{z-index:134}
-.u-z-135{z-index:135}
-.u-z-136{z-index:136}
-.u-z-137{z-index:137}
-.u-z-138{z-index:138}
-.u-z-139{z-index:139}
-.u-z-140{z-index:140}
-.u-z-141{z-index:141}
-.u-z-142{z-index:142}
-.u-z-143{z-index:143}
-.u-z-144{z-index:144}
-.u-z-145{z-index:145}
-.u-z-146{z-index:146}
-.u-z-147{z-index:147}
-.u-z-148{z-index:148}
-.u-z-149{z-index:149}
-.u-z-150{z-index:150}
-.u-z-151{z-index:151}
-.u-z-152{z-index:152}
-.u-z-153{z-index:153}
-.u-z-154{z-index:154}
-.u-z-155{z-index:155}
-.u-z-156{z-index:156}
-.u-z-157{z-index:157}
-.u-z-158{z-index:158}
-.u-z-159{z-index:159}
-.u-z-160{z-index:160}
-.u-z-161{z-index:161}
-.u-z-162{z-index:162}
-.u-z-163{z-index:163}
-.u-z-164{z-index:164}
-.u-z-165{z-index:165}
-.u-z-166{z-index:166}
-.u-z-167{z-index:167}
-.u-z-168{z-index:168}
-.u-z-169{z-index:169}
-.u-z-170{z-index:170}
-.u-z-171{z-index:171}
-.u-z-172{z-index:172}
-.u-z-173{z-index:173}
-.u-z-174{z-index:174}
-.u-z-175{z-index:175}
-.u-z-176{z-index:176}
-.u-z-177{z-index:177}
-.u-z-178{z-index:178}
-.u-z-179{z-index:179}
-.u-z-180{z-index:180}
-.u-z-181{z-index:181}
-.u-z-182{z-index:182}
-.u-z-183{z-index:183}
-.u-z-184{z-index:184}
-.u-z-185{z-index:185}
-.u-z-186{z-index:186}
-.u-z-187{z-index:187}
-.u-z-188{z-index:188}
-.u-z-189{z-index:189}
-.u-z-190{z-index:190}
-.u-z-191{z-index:191}
-.u-z-192{z-index:192}
-.u-z-193{z-index:193}
-.u-z-194{z-index:194}
-.u-z-195{z-index:195}
-.u-z-196{z-index:196}
-.u-z-197{z-index:197}
-.u-z-198{z-index:198}
-.u-z-199{z-index:199}
-.u-z-200{z-index:200}
+.instrument-shell { position: relative; isolation: isolate; }
+.instrument-shell::before { content: ""; position: absolute; inset: 0; pointer-events: none; border: 1px solid rgba(99,230,255,.08); border-radius: inherit; }
+.instrument-shell::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: repeating-linear-gradient(0deg, transparent 0 5px, rgba(99,230,255,.012) 6px); }
+.panel[data-state="warning"] { border-color: rgba(255,203,114,.4); }
+.panel[data-state="critical"] { border-color: rgba(255,111,131,.55); }
+.panel[data-state="complete"] { border-color: rgba(130,255,193,.4); }
+.status-pill[data-tone="cyan"] { color: var(--cyan); }
+.status-pill[data-tone="green"] { color: var(--green); }
+.status-pill[data-tone="amber"] { color: var(--amber); }
+.status-pill[data-tone="red"] { color: var(--red); }
+.objective-item:focus-within { outline: 1px solid var(--cyan); outline-offset: 2px; }
+.objective-name { overflow-wrap: anywhere; }
+.objective-hint { overflow-wrap: anywhere; }
+.objective-item[data-distance="near"] { box-shadow: inset 2px 0 var(--amber); }
+.objective-item[data-distance="far"] { box-shadow: inset 2px 0 rgba(103,188,224,.16); }
+.objective-item[data-distance="complete"] { box-shadow: inset 2px 0 var(--green); }
+.telemetry-value[data-quality="excellent"] { color: var(--green); }
+.telemetry-value[data-quality="good"] { color: var(--cyan); }
+.telemetry-value[data-quality="adjust"] { color: var(--amber); }
+.telemetry-value[data-quality="poor"] { color: var(--red); }
+.stat-card[data-level="high"] { border-color: rgba(130,255,193,.3); }
+.stat-card[data-level="medium"] { border-color: rgba(255,203,114,.3); }
+.stat-card[data-level="low"] { border-color: rgba(255,111,131,.35); }
+.readout-value { font-variant-numeric: tabular-nums; }
+.telemetry-value { font-variant-numeric: tabular-nums; }
+.result-item strong { font-variant-numeric: tabular-nums; }
+.route-preview { image-rendering: auto; }
+.route-preview:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+.modal-content p { margin: 8px 0 12px; }
+.modal-content strong { color: #e9f9ff; }
+.modal-content code { color: var(--cyan); font-family: var(--mono); }
+.modal-content .callout { padding: 11px 13px; border: 1px solid var(--line); border-radius: 9px; background: rgba(14,33,50,.7); }
+.modal-card[data-tone="success"] { border-color: rgba(130,255,193,.5); }
+.modal-card[data-tone="warning"] { border-color: rgba(255,203,114,.5); }
+.modal-card[data-tone="danger"] { border-color: rgba(255,111,131,.5); }
+.primary-button:focus-visible { outline-color: #baf7ff; }
+.secondary-button:focus-visible { outline-color: var(--cyan); }
+.keycap { user-select: none; }
+.control-group { min-height: 26px; }
+.control-strip { backdrop-filter: blur(12px); }
+.footer-note a { color: var(--cyan); }
+.footer-note strong { color: #bdd9e9; }
+.toast { overflow-wrap: anywhere; }
+.toast.success { color: #d9ffed; }
+.toast.warning { color: #ffe8c0; }
+.toast.error { border-color: rgba(255,111,131,.6); color: #ffdce1; }
+.toast.info { border-color: rgba(99,230,255,.45); }
+.battery-track { flex-shrink: 0; }
+.battery-fill { min-width: 0; }
+.stage-label { max-width: min(340px, 65%); }
+.stage-location { overflow-wrap: anywhere; }
+.stage-coordinates { font-variant-numeric: tabular-nums; }
+.stage-alert { white-space: pre-line; }
+.hud-bottom { z-index: 2; }
+.stage-topline { z-index: 2; }
+.stage-vignette { z-index: 1; }
+#gameCanvas { position: relative; z-index: 0; }
+#gameCanvas:focus-visible { outline: 2px solid rgba(99,230,255,.5); outline-offset: -5px; }
+#launchOverlay { z-index: 6; }
+#launchOverlay[hidden] { display: none; }
+.launch-card { position: relative; overflow: hidden; }
+.launch-card::before { content: ""; position: absolute; width: 260px; height: 260px; top: -180px; right: -100px; border: 1px solid rgba(99,230,255,.12); border-radius: 50%; pointer-events: none; }
+.launch-card::after { content: ""; position: absolute; width: 170px; height: 170px; top: -135px; right: -55px; border: 1px solid rgba(99,230,255,.09); border-radius: 50%; pointer-events: none; }
+.launch-note strong { color: #ffdfa8; letter-spacing: .08em; }
+.launch-foot { line-height: 1.5; }
+.launch-count { font-variant-numeric: tabular-nums; }
+.launch-progress-fill { position: relative; }
+.launch-progress-fill::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, rgba(255,255,255,.42), transparent); }
+.mission-progress-fill { position: relative; }
+.mission-progress-fill::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, rgba(255,255,255,.2), transparent); }
+.panel-header { min-height: 48px; }
+.panel-title { line-height: 1.4; }
+.panel-kicker { line-height: 1.4; text-align: right; }
+.panel-body > :first-child { margin-top: 0; }
+.panel-body > :last-child { margin-bottom: 0; }
+.objective-list:empty::after { content: "No objectives loaded"; color: var(--muted); font-size: 11px; padding: 12px 0; }
+.mission-log:empty::after { content: "No events yet"; color: var(--muted); font-size: 10px; }
+.log-entry { align-items: start; }
+.log-time { padding-top: 1px; }
+.log-message { overflow-wrap: anywhere; }
+.route-legend { align-items: center; }
+.legend-item { white-space: nowrap; }
+.legend-dot { flex-shrink: 0; box-shadow: 0 0 8px currentColor; }
+.target-banner { box-shadow: 0 10px 26px rgba(0,0,0,.14); }
+.target-banner > div { min-width: 0; }
+.target-banner strong { overflow-wrap: anywhere; }
+.target-banner span { line-height: 1.5; }
+.target-banner button { flex-shrink: 0; }
+.mobile-controls button { min-width: 0; }
+.mobile-controls button:active { background: #20506c; border-color: var(--cyan); }
+.mobile-actions button:active { transform: translateY(1px); }
+.modal-backdrop { overscroll-behavior: contain; }
+.modal-card { overscroll-behavior: contain; }
+.modal-heading { position: sticky; top: 0; z-index: 1; background: #091725; }
+.modal-footer { position: sticky; bottom: 0; background: #091725; }
+.modal-heading h2 { overflow-wrap: anywhere; }
+.result-score { font-variant-numeric: tabular-nums; }
+.result-caption { line-height: 1.6; }
+.result-grid { align-items: stretch; }
+.result-item { min-width: 0; }
+.result-item strong { overflow-wrap: anywhere; }
+.app-shell { isolation: isolate; }
+.topbar { position: relative; z-index: 2; }
+.brand-title { line-height: 1.2; }
+.brand-subtitle { line-height: 1.5; }
+.brand-mark { flex-shrink: 0; }
+.top-status { max-width: 48%; }
+.status-pill { line-height: 1.4; }
+.stage-frame { isolation: isolate; }
+.stage-frame::after { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; box-shadow: inset 0 0 0 1px rgba(255,255,255,.025); }
+.main-column { position: relative; }
+.side-column { position: relative; }
+.panel { min-width: 0; }
+.panel-actions button { line-height: 1.4; }
+.help-tip strong { color: #cceeff; }
+.eyebrow { line-height: 1.5; }
+.primary-button { line-height: 1.35; }
+.secondary-button { line-height: 1.35; }
+button { -webkit-tap-highlight-color: transparent; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: .01ms !important; }
+}
+@media (min-width: 1200px) {
+  .app-shell { padding-left: 22px; padding-right: 22px; }
+  .layout { gap: 18px; }
+  .side-column { gap: 14px; }
+}
+@media (max-width: 820px) {
+  .top-status { max-width: none; }
+  .target-banner.visible { align-items: flex-start; }
+  .target-banner button { align-self: center; }
+}
+@media (max-width: 460px) {
+  .top-status { gap: 5px; }
+  .top-status .status-pill { letter-spacing: .025em; }
+  .brand { gap: 8px; }
+  .brand-title { letter-spacing: .04em; }
+  .stage-label { max-width: 68%; }
+  .stage-alert { max-width: 30%; font-size: 8px; }
+  .target-banner.visible { flex-direction: column; }
+  .target-banner button { width: 100%; }
+  .result-grid { grid-template-columns: 1fr 1fr; }
+}
 
-.deployment-scene{position:absolute;inset:0;z-index:2;overflow:hidden;display:none;background:radial-gradient(ellipse at 70% 15%,#163d65 0%,#07152b 42%,#020611 100%);}
-.deployment-scene.active{display:block;animation:sceneFade .45s ease-out both}
-.deployment-scene:after{content:"";position:absolute;inset:0;background:linear-gradient(115deg,transparent 20%,#66dfff0a 46%,transparent 65%);pointer-events:none}
-.scene-stars{position:absolute;inset:0;background-image:radial-gradient(#d7f7ff 1px,transparent 1.5px),radial-gradient(#74cfff 1px,transparent 1.5px);background-size:53px 53px,89px 89px;background-position:0 0,22px 17px;animation:starsDrift 18s linear infinite;opacity:.65}
-.earth-limb{position:absolute;width:75%;height:85%;left:38%;top:48%;border-radius:50%;background:radial-gradient(ellipse at 35% 24%,#5dd5ff 0%,#1464a3 23%,#0b2c60 50%,#061229 70%);box-shadow:0 -8px 35px #54d9ff8a,inset 0 10px 28px #8aeaff70;transform:rotate(-15deg)}
-.earth-limb:after{content:"";position:absolute;inset:0;border-radius:50%;background:repeating-linear-gradient(168deg,transparent 0 22px,#6bd9ff20 24px 27px,transparent 29px 43px)}
-.kibo-wall{position:absolute;width:42%;height:120%;left:-9%;top:-10%;transform:rotate(8deg);background:linear-gradient(90deg,#34465a,#b5c6d3 13%,#50657b 20%,#18283c 48%,#73889b 70%,#24354a);border-right:5px solid #9eb4c5;box-shadow:20px 0 35px #000b;}
-.kibo-wall:before,.kibo-wall:after{content:"";position:absolute;left:0;right:0;height:14px;background:repeating-linear-gradient(90deg,#172537 0 13px,#b7c9d8 14px 18px,#52687d 19px 32px);box-shadow:0 2px 8px #000}
-.kibo-wall:before{top:16%}.kibo-wall:after{top:77%}
-.kibo-label{position:absolute;top:25%;left:18%;font-weight:1000;letter-spacing:.22em;font-size:clamp(14px,2vw,25px);color:#d9e8f4;text-shadow:0 2px 8px #000}
-.module-rib{position:absolute;top:0;bottom:0;width:12px;background:linear-gradient(90deg,#25384c,#d0dce6,#52687e);box-shadow:0 0 10px #0008}.rib-a{left:19%}.rib-b{right:15%}
-.module-window{position:absolute;left:22%;top:33%;width:48%;height:25%;border:9px solid #9aaebf;border-radius:10px;background:linear-gradient(140deg,#0c2442,#2b6d9a 48%,#071529);box-shadow:inset 0 0 30px #4acbff55,0 0 18px #000}
-.module-hatch{position:absolute;right:-9%;top:41%;width:35%;aspect-ratio:1;border-radius:50%;border:10px solid #d0dce5;background:radial-gradient(circle,#152b43 0 54%,#667e91 57% 63%,#1c2a3b 66%);box-shadow:0 0 20px #66dfff55}
-.module-hatch span{position:absolute;inset:17%;border:2px dashed #70eaff;border-radius:50%}
-.drone-path{position:absolute;left:31%;top:52%;width:43%;height:18%;border-top:2px dashed #72edffb8;border-radius:50%;transform:rotate(-18deg);filter:drop-shadow(0 0 5px #65dfff);animation:pathPulse 1.6s ease-in-out infinite}
-.intball{position:absolute;left:48%;top:43%;width:clamp(72px,12vw,135px);aspect-ratio:1;border-radius:50%;background:radial-gradient(circle at 32% 25%,#fff 0,#dce7ed 24%,#8599aa 52%,#3c5268 74%,#e3edf4 77%,#73889a 100%);border:3px solid #e4f1f8;box-shadow:0 0 30px #4de4ff77,inset -9px -12px 18px #14253c;animation:droneDeploy 3s cubic-bezier(.2,.7,.25,1) both;}
-.drone-lens{position:absolute;width:28%;height:28%;left:35%;top:31%;border-radius:50%;border:5px solid #202f42;background:radial-gradient(circle at 35% 35%,#9ef4ff,#176a9b 38%,#030a14 72%);box-shadow:0 0 10px #4deaff}
-.drone-light{position:absolute;width:8%;height:8%;border-radius:50%;background:#60f7ff;box-shadow:0 0 12px #60f7ff;animation:lightBlink .7s steps(2) infinite}.light-a{right:19%;top:28%}.light-b{left:20%;bottom:24%;background:#ffb76d;box-shadow:0 0 12px #ffb76d}
-.drone-mark{position:absolute;left:29%;bottom:20%;font-size:clamp(7px,1vw,11px);font-weight:1000;color:#1d4d7e;letter-spacing:.08em}
-.deployment-copy{position:absolute;z-index:4;left:5%;bottom:7%;display:grid;gap:7px;text-shadow:0 2px 10px #000}.deployment-copy span{font-size:clamp(9px,1.2vw,13px);letter-spacing:.22em;color:#80f0ff;font-weight:900}.deployment-copy strong{font-size:clamp(20px,3.8vw,42px);letter-spacing:.06em;color:#fff}.deployment-copy small{font-size:clamp(8px,1vw,11px);letter-spacing:.1em;color:#b8d6ed}
-.intro-hero{padding-top:18px}.intro-art{height:190px;position:relative;border:1px solid #345879;border-radius:16px;overflow:hidden;margin-bottom:23px;background:radial-gradient(ellipse at 70% 20%,#15528a,#07162d 55%,#030813)}.intro-earth{position:absolute;width:60%;height:160%;left:45%;top:38%;border-radius:50%;background:radial-gradient(circle at 35% 30%,#8deaff,#1e79b9 25%,#092451 65%);box-shadow:0 -4px 22px #56dfff88}.intro-module{position:absolute;left:-3%;top:16%;width:43%;height:70%;border:7px solid #b9c9d7;border-radius:12px;background:repeating-linear-gradient(90deg,#293b4d 0 12px,#8198aa 13px 17px,#15253a 18px 27px);box-shadow:0 0 20px #000}.intro-module span{position:absolute;left:20%;top:38%;font-weight:1000;letter-spacing:.3em;color:#f4fbff;font-size:20px}.intro-module i{position:relative;display:inline-block;top:14px;width:10px;height:90%;margin-left:18px;background:#c9d8e4}.intro-drone{position:absolute;left:51%;top:24%;width:115px;height:115px;border-radius:50%;background:radial-gradient(circle at 30% 22%,#fff,#d7e2e9 28%,#667e92 70%,#e8f1f6 73%);border:3px solid #e7f6ff;box-shadow:0 0 24px #57ddff;animation:introFloat 4s ease-in-out infinite}.intro-drone b{position:absolute;left:36%;top:30%;width:28%;height:28%;border:5px solid #1d2d40;border-radius:50%;background:radial-gradient(circle,#5deaff,#071426 70%)}.intro-drone i{position:absolute;width:7px;height:7px;border-radius:50%;background:#54f4ff;box-shadow:0 0 10px #54f4ff;right:14%;top:27%}.intro-module{position:absolute;width:210px;height:68px;left:43%;top:35%;border:1px solid #7befff8c;border-radius:50%;transform:rotate(-24deg)}.intro-art-caption{position:absolute;bottom:10px;left:12px;font-size:9px;letter-spacing:.2em;color:#b8d7ed}
-@keyframes sceneFade{from{opacity:0}to{opacity:1}}@keyframes starsDrift{to{background-position:53px 53px,-67px 106px}}@keyframes pathPulse{50%{opacity:.3}}@keyframes lightBlink{50%{opacity:.2}}@keyframes droneDeploy{0%{transform:translate(-85px,80px) scale(.45);opacity:0}25%{opacity:1}65%{transform:translate(20px,-8px) scale(1.05)}100%{transform:translate(0,0) scale(1)}}@keyframes introFloat{50%{transform:translateY(-8px) rotate(4deg)}}
-@media(max-width:600px){.deployment-copy{bottom:5%;left:4%}.kibo-wall{width:48%}.intball{left:52%;top:38%}.intro-art{height:150px}.intro-drone{width:88px;height:88px}}
+
+.telemetry-row:hover { background: rgba(99,230,255,.025); }
+.objective-item { position: relative; }
+.objective-item::after { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; opacity: 0; transition: opacity .18s ease; box-shadow: inset 0 0 20px rgba(99,230,255,.04); }
+.objective-item.active::after { opacity: 1; }
+.objective-icon { flex-shrink: 0; }
+.objective-state { align-self: start; padding-top: 3px; }
+.stat-grid { align-items: stretch; }
+.stat-card { min-width: 0; }
+.stat-value { overflow-wrap: anywhere; }
+.mission-log { scrollbar-gutter: stable; }
+.log-entry:first-child .log-time { color: var(--cyan); }
+.log-entry.alert .log-time { color: var(--red); }
+.route-preview { max-width: 100%; }
+.route-legend { row-gap: 7px; }
+.legend-item:nth-child(1) .legend-dot { color: #63e6ff; }
+.legend-item:nth-child(2) .legend-dot { color: #ffcb72; }
+.legend-item:nth-child(3) .legend-dot { color: #82ffc1; }
+.stage-frame canvas { max-width: 100%; }
+.stage-label .eyebrow { white-space: nowrap; }
+.stage-coordinates { white-space: nowrap; }
+.hud-readout { backdrop-filter: blur(8px); }
+.scan-indicator { backdrop-filter: blur(8px); }
+.scan-indicator::first-letter { text-shadow: 0 0 8px currentColor; }
+.launch-symbol { position: relative; }
+.launch-symbol::before { content: ""; position: absolute; inset: -8px; border: 1px dashed rgba(99,230,255,.22); border-radius: 50%; animation: orbit 18s linear infinite; }
+.launch-symbol::after { content: ""; position: absolute; inset: 7px; border: 1px solid rgba(130,255,193,.12); border-radius: 50%; }
+.launch-title { text-wrap: balance; }
+.launch-description { text-wrap: pretty; }
+.launch-note { text-wrap: pretty; }
+.launch-button { position: relative; overflow: hidden; }
+.launch-button::after { content: ""; position: absolute; inset: 0; background: linear-gradient(110deg, transparent 20%, rgba(255,255,255,.28) 50%, transparent 80%); transform: translateX(-120%); transition: transform .45s ease; }
+.launch-button:hover::after { transform: translateX(120%); }
+.panel-actions button { white-space: normal; }
+.modal-content { overflow-wrap: anywhere; }
+.modal-content ul { margin-bottom: 0; }
+.modal-content li::marker { color: var(--cyan); }
+.modal-footer .primary-button { min-width: 120px; }
+.modal-heading .secondary-button { min-width: 36px; padding: 8px; }
+.toast-stack { max-height: 50vh; overflow: hidden; }
+.toast { animation-fill-mode: both; }
+@media (hover: hover) {
+  .panel { transition: border-color .18s ease; }
+  .panel:hover { border-color: rgba(103,188,224,.34); }
+  .objective-item:hover { border-color: rgba(103,188,224,.3); }
+  .secondary-button:hover { transform: translateY(-1px); }
+}
+@media (max-width: 820px) {
+  .side-column .panel { width: 100%; }
+  .mobile-controls { user-select: none; }
+  .mobile-actions { user-select: none; }
+  .mobile-controls button { font-size: 16px; }
+  .mobile-actions button { font-size: 11px; }
+  .panel-actions { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .panel-actions button:last-child { grid-column: 1 / -1; }
+}
+@media (max-width: 560px) {
+  .control-strip { gap: 6px; }
+  .control-group { gap: 5px; }
+  .panel-actions { grid-template-columns: 1fr 1fr; }
+  .panel-actions button { min-width: 0; }
+  .modal-content { padding: 16px; }
+  .modal-heading { padding: 14px 16px; }
+  .modal-footer { padding: 0 16px 16px; }
+  .toast-stack { right: 9px; bottom: 9px; }
+  .toast { max-width: calc(100vw - 18px); }
+}
 
 </style>
 </head>
 <body>
 <div class="app-shell">
 <header class="topbar">
-  <div class="brand"><div class="brand-mark">K</div><div><h1>KIBO <span style="color:var(--cyan)">MISSION TRAINER</span></h1><p>Junior Astronaut Program · Orbital Operations</p></div></div>
-  <div class="top-actions"><div class="pill"><span class="dot"></span> SIMULATION READY</div><button class="subtle" id="helpBtn">How to play</button><button class="subtle" id="soundBtn" aria-pressed="false">Sound: Off</button><button class="danger" id="resetBtn">Restart</button></div>
+  <div class="brand">
+    <div class="brand-mark" aria-hidden="true">
+      <svg viewBox="0 0 40 40" fill="none"><circle cx="20" cy="20" r="15" stroke="#63e6ff" stroke-width="1.6"/><ellipse cx="20" cy="20" rx="7" ry="15" stroke="#63e6ff" stroke-width="1.2"/><path d="M5 20h30M8 12h24M8 28h24" stroke="#63e6ff" stroke-width="1.2"/><circle cx="20" cy="20" r="3" fill="#82ffc1"/></svg>
+    </div>
+    <div class="brand-copy">
+      <h1 class="brand-title">KIBO <span style="color:var(--cyan)">MISSION TRAINER</span></h1>
+      <div class="brand-subtitle">Junior Astronaut Mission Simulator · Practice Build</div>
+    </div>
+  </div>
+  <div class="top-status">
+    <div class="status-pill"><span class="status-dot"></span> SYSTEM READY</div>
+    <div class="status-pill">INT-BALL2 · TRAINING MODE</div>
+  </div>
 </header>
-<div class="layout">
-<main class="main-column">
-<section class="panel">
-  <div class="panel-head"><h2>Orbital Operations View</h2><span id="phaseLabel">MISSION CONTROL · STANDBY</span></div>
-  <div class="viewport" id="viewport">
-    <canvas id="spaceCanvas" aria-label="Interactive Kibo module interior training simulation"></canvas>
-    <div class="canvas-overlay"><div class="hud-row"><div class="hud-chip">MISSION <strong id="hudMission">KIBO-01 / MODULE INSPECTION</strong></div><div class="hud-chip" style="text-align:right">FLIGHT TIME<strong id="hudTime" class="mono">00:00</strong></div></div><div class="hud-row"><div class="hud-chip">VELOCITY<strong id="hudVelocity" class="mono">0.0 m/s</strong></div><div class="hud-chip" style="text-align:right">RANGE TO TARGET<strong id="hudRange" class="mono">1,200 m</strong></div></div></div>
-    <div class="crosshair"></div><div class="scan-reticle"></div><div class="launch-count" id="launchCount">3</div>
-    <div class="deployment-scene" id="deploymentScene" aria-hidden="true"><div class="scene-stars"></div><div class="earth-limb"></div><div class="kibo-wall"><div class="kibo-label">KIBO · JEM</div><div class="module-rib rib-a"></div><div class="module-rib rib-b"></div><div class="module-window"></div><div class="module-hatch"><span></span></div></div><div class="drone-path"></div><div class="intball"><div class="drone-lens"></div><div class="drone-light light-a"></div><div class="drone-light light-b"></div><div class="drone-mark">JAXA</div></div><div class="deployment-copy"><span>INT-BALL2 DEPLOYMENT</span><strong id="deploymentStatus">SYSTEM CHECK</strong><small>FREE-FLYING CAMERA ROBOT · SIMULATION</small></div></div>
-  </div>
-  <div class="status-strip">
-    <div class="status-cell"><div class="status-label">Propellant</div><div class="status-value"><span id="fuelText">100%</span><span class="muted small">RCS</span></div><div class="bar"><span id="fuelBar"></span></div></div>
-    <div class="status-cell"><div class="status-label">Battery</div><div class="status-value"><span id="batteryText">100%</span><span class="muted small">PWR</span></div><div class="bar green"><span id="batteryBar"></span></div></div>
-    <div class="status-cell"><div class="status-label">Hull integrity</div><div class="status-value"><span id="hullText">100%</span><span class="muted small">SAFE</span></div><div class="bar green"><span id="hullBar"></span></div></div>
-    <div class="status-cell"><div class="status-label">Mission score</div><div class="status-value"><span id="scoreText">0000</span><span class="muted small">PTS</span></div><div class="bar amber"><span id="scoreBar" style="width:0%"></span></div></div>
-  </div>
-</section>
-<div class="below-grid">
-<section class="panel"><div class="panel-head"><h2>Flight Controls</h2><span>THRUSTER / ATTITUDE</span></div><div class="controls-body">
-  <div class="control-grid" aria-label="Direction controls">
-    <span class="blank">.</span><button data-control="forward" aria-label="Thrust forward">▲ <span class="key">W</span></button><span class="blank">.</span>
-    <button data-control="left" aria-label="Rotate left">↶ <span class="key">A</span></button><button data-control="brake" aria-label="Stabilize">◎ <span class="key">SPACE</span></button><button data-control="right" aria-label="Rotate right">↷ <span class="key">D</span></button>
-    <button data-control="strafeLeft" aria-label="Strafe left">◀ <span class="key">Q</span></button><button data-control="reverse" aria-label="Reverse thrust">▼ <span class="key">S</span></button><button data-control="strafeRight" aria-label="Strafe right">▶ <span class="key">E</span></button>
-  </div>
-  <div class="control-caption">W/S thrust · A/D rotate · Q/E strafe · Space stabilize</div>
-  <div class="action-row"><button id="scanBtn">⌕ Scan target <span class="key">ENTER</span></button><button id="interactBtn">◎ Interact <span class="key">F</span></button><button id="pauseBtn">Ⅱ Pause <span class="key">P</span></button></div>
-  <p class="mobile-hint">On mobile, tap and hold the direction buttons. Use Scan and Interact to complete each training step.</p>
-</div></section>
-<section class="panel"><div class="panel-head"><h2>Mission Checklist</h2><span id="objectiveCount">0 / 7 COMPLETE</span></div><div class="objective-list" id="objectiveList"></div></section>
-</div>
+<main class="layout">
+  <section class="main-column">
+    <div class="stage-frame">
+      <canvas id="gameCanvas" tabindex="0" aria-label="Kibo module mission simulator"></canvas>
+      <div class="stage-vignette"></div>
+      <div class="stage-topline">
+        <div class="stage-label">
+          <div class="eyebrow">Current location</div>
+          <div class="stage-location" id="locationName">KIBO PRESSURIZED MODULE</div>
+          <div class="stage-coordinates" id="coordinateReadout">X 00.0 · Y 00.0 · HDG 000°</div>
+        </div>
+        <div class="stage-alert" id="stageAlert">MISSION CONTROL LINK ESTABLISHED<br>AWAITING LAUNCH AUTHORIZATION</div>
+      </div>
+      <div class="hud-bottom">
+        <div class="hud-readouts">
+          <div class="hud-readout"><div class="readout-label">Mission time</div><div class="readout-value" id="timerReadout">00:00</div></div>
+          <div class="hud-readout"><div class="readout-label">Velocity</div><div class="readout-value"><span id="speedReadout">0.0</span><span style="font-size:9px;color:var(--muted)"> m/s</span></div></div>
+        </div>
+        <div class="scan-indicator" id="scanIndicator">● SCANNER STANDBY</div>
+      </div>
+      <div class="center-overlay" id="launchOverlay">
+        <div class="launch-card" id="launchCard">
+          <div class="launch-symbol">
+            <svg viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="23" stroke="currentColor" stroke-width="1.5"/><circle cx="32" cy="32" r="13" stroke="currentColor" stroke-width="1.5" stroke-dasharray="4 4"/><circle cx="32" cy="32" r="5" fill="#82ffc1"/><path d="M32 3v10M32 51v10M3 32h10M51 32h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="m21 21 7 7m8 8 7 7m0-22-7 7m-8 8-7 7" stroke="currentColor" stroke-width="1.3" opacity=".7"/></svg>
+          </div>
+          <div class="eyebrow">Mission operations · training console</div>
+          <h2 class="launch-title">READY FOR<br><span>DEPLOYMENT</span></h2>
+          <p class="launch-description">Pilot an Int-Ball2-inspired inspection drone through a finite Kibo module. Visit every AR checkpoint, align your heading, and complete the inspection route before returning to the goal point.</p>
+          <div class="launch-note"><strong>TRAINING SIMULATOR NOTICE</strong><br>This is an independent educational practice project, not an official JAXA or NASA simulator. Locations and scoring are illustrative until official mission materials specify otherwise.</div>
+          <button class="primary-button launch-button" id="launchButton">▶ &nbsp; Begin launch sequence</button>
+          <div class="launch-foot">KEYBOARD + TOUCH CONTROLS · AUTOSAVING DISABLED</div>
+        </div>
+      </div>
+    </div>
+    <div class="target-banner" id="targetBanner">
+      <div><strong id="targetBannerTitle">Checkpoint in range</strong><span id="targetBannerText">Align the robot and scan the marker.</span></div>
+      <button class="primary-button" id="targetBannerButton">SCAN TARGET</button>
+    </div>
+    <div class="control-strip">
+      <div class="control-group"><span class="keycap">W</span><span class="keycap">A</span><span class="keycap">S</span><span class="keycap">D</span><span class="control-label">Translate</span></div>
+      <div class="control-group"><span class="keycap">←</span><span class="keycap">→</span><span class="control-label">Rotate heading</span></div>
+      <div class="control-group"><span class="keycap">E</span><span class="control-label">Interact</span><span class="keycap">F</span><span class="control-label">Scan marker</span></div>
+      <div class="control-group"><span class="keycap">R</span><span class="control-label">Stabilize</span><span class="keycap">H</span><span class="control-label">Help</span></div>
+    </div>
+    <div class="mobile-controls" aria-label="Movement controls">
+      <button class="empty" tabindex="-1" aria-hidden="true">·</button>
+      <button data-hold="up" aria-label="Move forward">▲</button>
+      <button class="empty" tabindex="-1" aria-hidden="true">·</button>
+      <button data-hold="left" aria-label="Move left">◀</button>
+      <button data-hold="down" aria-label="Move backward">▼</button>
+      <button data-hold="right" aria-label="Move right">▶</button>
+    </div>
+    <div class="mobile-actions">
+      <button class="secondary-button" id="mobileRotateLeft">↶ Rotate</button>
+      <button class="secondary-button" id="mobileRotateRight">Rotate ↷</button>
+      <button class="secondary-button" id="mobileInteract">E · Interact</button>
+      <button class="primary-button" id="mobileScan">F · Scan</button>
+    </div>
+  </section>
+  <aside class="side-column">
+    <section class="panel">
+      <div class="panel-header"><h2 class="panel-title">Mission objectives</h2><span class="panel-kicker" id="objectiveCounter">0 / 6</span></div>
+      <div class="panel-body">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><span class="panel-kicker">Route completion</span><strong id="progressPercent" style="font-family:var(--mono);font-size:12px;color:var(--cyan)">0%</strong></div>
+        <div class="mission-progress"><div class="mission-progress-fill" id="missionProgressFill"></div></div>
+        <div class="objective-list" id="objectiveList"></div>
+        <div class="help-tip">Your next target is highlighted. Move close, face the marker, then use <strong>F</strong> or the Scan button. If you miss a scan, reposition and try again.</div>
+      </div>
+    </section>
+    <section class="panel">
+      <div class="panel-header"><h2 class="panel-title">Flight telemetry</h2><span class="panel-kicker">Live</span></div>
+      <div class="panel-body">
+        <div class="telemetry-row"><span class="telemetry-key">Position X</span><span class="telemetry-value" id="telemetryX">0.00 m</span></div>
+        <div class="telemetry-row"><span class="telemetry-key">Position Y</span><span class="telemetry-value" id="telemetryY">0.00 m</span></div>
+        <div class="telemetry-row"><span class="telemetry-key">Heading</span><span class="telemetry-value" id="telemetryHeading">000.0°</span></div>
+        <div class="telemetry-row"><span class="telemetry-key">Angular alignment</span><span class="telemetry-value" id="telemetryAlignment">—</span></div>
+        <div class="telemetry-row"><span class="telemetry-key">Battery</span><span class="battery-wrap"><span class="telemetry-value" id="batteryText">100%</span><span class="battery-track"><span class="battery-fill" id="batteryFill" style="display:block"></span></span></span></div>
+        <div class="telemetry-row"><span class="telemetry-key">Scanner</span><span class="telemetry-value" id="scannerStatus">STANDBY</span></div>
+      </div>
+    </section>
+    <section class="panel">
+      <div class="panel-header"><h2 class="panel-title">Route map</h2><span class="panel-kicker">Top-down</span></div>
+      <div class="panel-body">
+        <canvas class="route-preview" id="routeCanvas" width="560" height="240" aria-label="Route overview"></canvas>
+        <div class="route-legend">
+          <div class="legend-item"><span class="legend-dot" style="background:#63e6ff"></span>Drone</div>
+          <div class="legend-item"><span class="legend-dot" style="background:#ffcb72"></span>Next target</div>
+          <div class="legend-item"><span class="legend-dot" style="background:#82ffc1"></span>Scanned</div>
+        </div>
+      </div>
+    </section>
+    <section class="panel">
+      <div class="panel-header"><h2 class="panel-title">Mission log</h2><span class="panel-kicker" id="logCount">01 events</span></div>
+      <div class="panel-body"><div class="mission-log" id="missionLog" aria-live="polite"></div></div>
+    </section>
+    <section class="panel">
+      <div class="panel-header"><h2 class="panel-title">Mission controls</h2><span class="panel-kicker">Tools</span></div>
+      <div class="panel-body">
+        <div class="panel-actions">
+          <button class="secondary-button" id="helpButton">Help & controls</button>
+          <button class="secondary-button" id="routeButton">Route briefing</button>
+          <button class="secondary-button" id="resetButton">Restart mission</button>
+        </div>
+      </div>
+    </section>
+  </aside>
 </main>
-<aside class="side-stack">
-<section class="panel"><div class="panel-head"><h2>Flight Telemetry</h2><span>LIVE</span></div><div class="side-panel"><div class="telemetry-list">
-  <div class="telemetry-row"><span>Mission state</span><strong id="telemetryState" style="color:var(--amber)">STANDBY</strong></div>
-  <div class="telemetry-row"><span>Altitude</span><strong id="altitude" class="mono">408.0 km</strong></div>
-  <div class="telemetry-row"><span>Relative speed</span><strong id="speed" class="mono">0.0 m/s</strong></div>
-  <div class="telemetry-row"><span>Attitude</span><strong id="attitude" class="mono">000°</strong></div>
-  <div class="telemetry-row"><span>Target bearing</span><strong id="bearing" class="mono">000°</strong></div>
-  <div class="telemetry-row"><span>Signal quality</span><strong id="signal">98%</strong></div>
-  <div class="telemetry-row"><span>Systems status</span><strong id="systems" style="color:var(--green)">NOMINAL</strong></div>
-</div></div></section>
-<section class="panel"><div class="panel-head"><h2>Proximity Radar</h2><span>RELATIVE POSITIONS</span></div><div class="side-panel"><div class="mini-map"><canvas id="radarCanvas" aria-label="Relative position radar"></canvas></div><div class="map-legend"><span><i class="legend-dot"></i> KIBO craft</span><span><i class="legend-dot gold"></i> Target</span><span>Not to scale</span></div></div></section>
-<section class="panel"><div class="panel-head"><h2>Mission Control Log</h2><span id="logCount">01 EVENTS</span></div><div class="side-panel"><div class="log" id="eventLog" aria-live="polite"></div></div></section>
-</aside>
+<footer class="footer-note">Independent educational practice simulator inspired by the Kibo Robot Programming Challenge scenario.<br>Not affiliated with or endorsed by JAXA, NASA, or the International Space Station program.</footer>
 </div>
-<div class="footer-note">Independent educational simulation · Inspired by moduleal science and astronaut training · Not an official NASA, JAXA, or space-agency product.</div>
+<div class="modal-backdrop" id="modalBackdrop" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+  <div class="modal-card">
+    <div class="modal-heading"><h2 id="modalTitle">Mission information</h2><button class="secondary-button" id="modalClose" aria-label="Close dialog">✕</button></div>
+    <div class="modal-content" id="modalContent"></div>
+    <div class="modal-footer"><button class="primary-button" id="modalOkay">Understood</button></div>
+  </div>
 </div>
-<div class="modal-backdrop show" id="introModal" role="dialog" aria-modal="true" aria-labelledby="introTitle"><div class="modal intro-hero"><div class="intro-art"><div class="intro-earth"></div><div class="intro-module"><span>KIBO</span><i></i><i></i><i></i></div><div class="intro-drone"><b></b><i></i><i></i></div><div class="intro-module"></div><div class="intro-art-caption">ISS · JAPANESE EXPERIMENT MODULE</div></div><div class="modal-kicker">KIBO ROBOT PROGRAMMING CHALLENGE · TRAINING SIMULATOR</div><h2 id="introTitle">Program the robot.<br><span style="color:var(--cyan)">Explore Kibo.</span></h2><p>Take control of an Int-Ball2-inspired free-flying camera robot inside a simulated Kibo module. Learn to translate, stabilize, inspect structural joints and experiment racks, and approach checkpoints with precision.</p><div class="mission-stats"><div class="stat-card"><span>ROBOT</span><strong>Int-Ball2</strong></div><div class="stat-card"><span>ENVIRONMENT</span><strong>Kibo / ISS</strong></div><div class="stat-card"><span>CHECKPOINTS</span><strong>7 tasks</strong></div></div><p class="small">Independent educational game inspired by the 7th Kibo Robot Programming Challenge. Not an official PhilSA or JAXA simulator. Controls and physics are simplified for learning and play.</p><div class="modal-actions"><button class="primary" id="startBtn">▶ Launch training simulation</button><button id="briefingBtn">Read controls</button></div></div></div>
-<div class="modal-backdrop" id="helpModal" role="dialog" aria-modal="true" aria-labelledby="helpTitle"><div class="modal"><div class="modal-kicker">FLIGHT MANUAL / QUICK REFERENCE</div><h2 id="helpTitle">Learn your<br><span style="color:var(--cyan)">controls.</span></h2><p><b>Move:</b> hold W or ▲ to thrust. S or ▼ reverses thrust. Q/E strafe sideways. A/D rotate your craft. Space applies stabilization to reduce drift.</p><p><b>Complete objectives:</b> follow the checklist. Get close to the highlighted object, press Enter to scan it, then press F to interact when the prompt says you are in range. Docking requires low relative speed and a close, centered approach.</p><p><b>Training tip:</b> in microgravity, your craft keeps moving after you stop thrusting. Use brief pulses and stabilize early rather than waiting until you reach the target.</p><div class="modal-actions"><button class="primary" id="closeHelp">Got it</button></div></div></div>
-<div class="modal-backdrop" id="resultModal" role="dialog" aria-modal="true" aria-labelledby="resultTitle"><div class="modal"><div class="modal-kicker">MISSION REPORT / KIBO-01</div><h2 id="resultTitle">Training<br><span style="color:var(--green)">complete.</span></h2><p id="resultMessage">You have completed the moduleal operations exercise.</p><div class="mission-stats"><div class="stat-card"><span>FINAL SCORE</span><strong id="finalScore">0000</strong></div><div class="stat-card"><span>FLIGHT TIME</span><strong id="finalTime">00:00</strong></div><div class="stat-card"><span>HULL INTEGRITY</span><strong id="finalHull">100%</strong></div></div><div class="modal-actions"><button class="primary" id="againBtn">Fly again</button><button id="reportBtn">Show debrief</button></div></div></div>
-<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<div class="toast-stack" id="toastStack" aria-live="polite"></div>
 <script>
-(()=>{'use strict';
-const $=id=>document.getElementById(id);
-const canvas=$('spaceCanvas');const ctx=canvas.getContext('2d');const radar=$('radarCanvas');const rctx=radar.getContext('2d');
-const viewport=$('viewport');
-const OBJECTIVES=[
- {title:'Complete launch sequence',desc:'Run the pre-flight checks and begin the Kibo module inspection exercise.',type:'launch',x:0,y:0},
- {title:'Calibrate attitude controls',desc:'Use the thrusters, then stabilize your rotation and drift.',type:'control',x:0,y:0},
- {title:'Scan Alpha joint',desc:'Approach the highlighted structural joint and perform a sensor scan.',type:'scan',x:230,y:-110},
- {title:'Inspect science rack 01',desc:'Move close to the research rack and interact with the equipment.',type:'interact',x:270,y:55},
- {title:'Inspect the hatch assembly',desc:'Scan the hatch assembly and verify its safety indicators.',type:'scan',x:100,y:175},
- {title:'Verify science rack 02',desc:'Reach the second equipment bay and complete its inspection.',type:'interact',x:-250,y:95},
- {title:'Dock at the service port',desc:'Align with the docking station, reduce relative speed, and complete docking.',type:'dock',x:-320,y:-165}
+'use strict';
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const routeCanvas = document.getElementById('routeCanvas');
+const routeCtx = routeCanvas.getContext('2d');
+const UI = {
+  overlay: document.getElementById('launchOverlay'),
+  launchCard: document.getElementById('launchCard'),
+  launchButton: document.getElementById('launchButton'),
+  location: document.getElementById('locationName'),
+  coordinates: document.getElementById('coordinateReadout'),
+  alert: document.getElementById('stageAlert'),
+  timer: document.getElementById('timerReadout'),
+  speed: document.getElementById('speedReadout'),
+  scan: document.getElementById('scanIndicator'),
+  objectives: document.getElementById('objectiveList'),
+  objectiveCounter: document.getElementById('objectiveCounter'),
+  progress: document.getElementById('missionProgressFill'),
+  progressPercent: document.getElementById('progressPercent'),
+  telemetryX: document.getElementById('telemetryX'),
+  telemetryY: document.getElementById('telemetryY'),
+  telemetryHeading: document.getElementById('telemetryHeading'),
+  telemetryAlignment: document.getElementById('telemetryAlignment'),
+  batteryText: document.getElementById('batteryText'),
+  batteryFill: document.getElementById('batteryFill'),
+  scannerStatus: document.getElementById('scannerStatus'),
+  log: document.getElementById('missionLog'),
+  logCount: document.getElementById('logCount'),
+  targetBanner: document.getElementById('targetBanner'),
+  targetTitle: document.getElementById('targetBannerTitle'),
+  targetText: document.getElementById('targetBannerText'),
+  targetButton: document.getElementById('targetBannerButton'),
+  modalBackdrop: document.getElementById('modalBackdrop'),
+  modalTitle: document.getElementById('modalTitle'),
+  modalContent: document.getElementById('modalContent'),
+  toastStack: document.getElementById('toastStack')
+};
+const WORLD = { width: 1200, height: 720, margin: 58, grid: 40 };
+const CONFIG = {
+  maxSpeed: 178,
+  acceleration: 650,
+  friction: 0.84,
+  rotationSpeed: 2.55,
+  interactionRadius: 70,
+  scanRadius: 90,
+  scanAngle: 0.72,
+  batteryDrain: 0.012,
+  scanDrain: 1.7,
+  missionTimeLimit: 900,
+  roomPadding: 36
+};
+const TARGETS = [
+  { id: 'dock', name: 'Docking station release', short: 'Dock release', type: 'dock', x: 125, y: 360, heading: 0, hint: 'Release Int-Ball2 from the docking station.', description: 'Confirm release clearance and stabilize the drone before leaving the docking area.', icon: 'D' },
+  { id: 'joint-a', name: 'Structural joint A', short: 'Joint A', type: 'joint', x: 345, y: 170, heading: 1.2, hint: 'Inspect the first structural joint.', description: 'Approach the joint marker, align the nose indicator, and register the AR marker.', icon: 'A' },
+  { id: 'hatch', name: 'Hatch perimeter', short: 'Hatch', type: 'hatch', x: 575, y: 530, heading: 2.5, hint: 'Check the hatch frame for a marker.', description: 'Inspect the hatch perimeter. Stay inside the safe flight boundary.', icon: 'H' },
+  { id: 'rack', name: 'Experiment rack end', short: 'Rack end', type: 'rack', x: 830, y: 180, heading: 5.3, hint: 'Inspect the end of the experiment rack.', description: 'Read the rack-end marker. Keep your speed low to improve recognition accuracy.', icon: 'R' },
+  { id: 'joint-b', name: 'Structural joint B', short: 'Joint B', type: 'joint', x: 1030, y: 470, heading: 3.4, hint: 'Inspect the second structural joint.', description: 'Capture the final structural joint marker and confirm the scan result.', icon: 'B' },
+  { id: 'goal', name: 'Return to goal checkpoint', short: 'Goal', type: 'goal', x: 145, y: 360, heading: 0, hint: 'Return to the docking/goal checkpoint.', description: 'Return to the goal zone to submit the route and finish the mission.', icon: 'G' }
 ];
-const state={started:false,paused:false,complete:false,phase:'STANDBY',x:0,y:0,vx:0,vy:0,angle:-Math.PI/2,angularVelocity:0,fuel:100,battery:100,hull:100,score:0,elapsed:0,lastFrame:0,launchElapsed:0,objective:0,done:new Set(),keys:new Set(),held:new Set(),scanCooldown:0,toastTimer:null,stars:[],particles:[],events:[],sound:false,audio:null,lastLog:0,controlsUsed:false,scanned:new Set(),interacted:new Set(),thrusting:false,showHelpAfterStart:false};
-const rand=(a,b)=>a+Math.random()*(b-a);const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);const wrapAngle=a=>((a%(Math.PI*2))+(Math.PI*2))%(Math.PI*2);const fmtTime=s=>`${String(Math.floor(s/60)).padStart(2,'0')}:${String(Math.floor(s%60)).padStart(2,'0')}`;const fmtNum=n=>Math.round(n).toLocaleString('en-US');
-for(let i=0;i<260;i++)state.stars.push({x:Math.random(),y:Math.random(),r:rand(.35,1.65),a:rand(.15,.9),tw:rand(0,8)});
-function log(message,kind=''){const entry={message,kind,time:state.elapsed};state.events.unshift(entry);state.events=state.events.slice(0,24);renderLog();}
-function renderLog(){$('eventLog').innerHTML=state.events.map(e=>`<div class="log-entry ${e.kind}"><time>${fmtTime(e.time)} · FLIGHT CONTROL</time>${escapeHtml(e.message)}</div>`).join('');$('logCount').textContent=`${String(state.events.length).padStart(2,'0')} EVENTS`;}
-function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
-function toast(message){const el=$('toast');el.textContent=message;el.classList.add('show');clearTimeout(state.toastTimer);state.toastTimer=setTimeout(()=>el.classList.remove('show'),2700);}
-function beep(freq=560,duration=.08,type='sine'){if(!state.sound)return;try{state.audio=state.audio||new(window.AudioContext||window.webkitAudioContext)();const o=state.audio.createOscillator();const g=state.audio.createGain();o.type=type;o.frequency.value=freq;g.gain.setValueAtTime(.035,state.audio.currentTime);g.gain.exponentialRampToValueAtTime(.001,state.audio.currentTime+duration);o.connect(g);g.connect(state.audio.destination);o.start();o.stop(state.audio.currentTime+duration);}catch(e){}}
-function targetFor(i=state.objective){const o=OBJECTIVES[Math.min(i,OBJECTIVES.length-1)];return{x:o.x,y:o.y};}
-function targetDistance(){return distance(state,targetFor());}
-function currentObjective(){return OBJECTIVES[Math.min(state.objective,OBJECTIVES.length-1)];}
-function addScore(n,why){state.score+=n;$('scoreText').textContent=String(state.score).padStart(4,'0');$('scoreBar').style.width=`${clamp(state.score/20,0,100)}%`;if(why)log(`${why} (+${n} points)`,'good');}
-function completeObjective(index,message){if(state.done.has(index))return;state.done.add(index);state.objective=Math.min(OBJECTIVES.length,state.done.size);addScore(150,message||`Objective complete: ${OBJECTIVES[index].title}`);beep(840,.16,'triangle');renderObjectives();if(state.objective>=OBJECTIVES.length)finishMission();else{state.phase='IN PROGRESS';toast(`OBJECTIVE COMPLETE: ${OBJECTIVES[index].title}`);log(`Next objective: ${currentObjective().title}`,'good');}}
-function renderObjectives(){$('objectiveList').innerHTML=OBJECTIVES.map((o,i)=>{const done=state.done.has(i),active=!done&&i===state.objective;return `<div class="objective ${done?'done':''} ${active?'active':''}"><div class="objective-mark">${done?'✓':String(i+1).padStart(2,'0')}</div><div><div class="objective-title">${o.title}</div><div class="objective-desc">${o.desc}</div></div><div class="objective-state">${done?'Complete':active?'Current':'Pending'}</div></div>`}).join('');$('objectiveCount').textContent=`${state.done.size} / ${OBJECTIVES.length} COMPLETE`;}
-function startMission(){if(state.started)return;state.started=true;state.phase='LAUNCH SEQUENCE';state.launchElapsed=0;state.elapsed=0;state.lastFrame=performance.now();$('introModal').classList.remove('show');$('deploymentScene').classList.add('active');$('deploymentStatus').textContent='RUNNING PRE-FLIGHT CHECKS';$('phaseLabel').textContent='INT-BALL2 DEPLOYMENT · PRE-FLIGHT';$('telemetryState').textContent='PRE-FLIGHT';$('telemetryState').style.color='var(--amber)';log('Flight control link established. Welcome, Kibo-RPC trainee.','good');log('Pre-flight checks running: guidance, camera, attitude control, and power.');toast('Deployment sequence initiated. Watch Int-Ball2 leave the Kibo module.');beep(420,.12);}
-function resetMission(){state.started=false;state.paused=false;state.complete=false;state.phase='STANDBY';state.x=0;state.y=0;state.vx=0;state.vy=0;state.angle=-Math.PI/2;state.angularVelocity=0;state.fuel=100;state.battery=100;state.hull=100;state.score=0;state.elapsed=0;state.lastFrame=performance.now();state.launchElapsed=0;state.objective=0;state.done.clear();state.keys.clear();state.held.clear();state.scanCooldown=0;state.controlsUsed=false;state.scanned.clear();state.interacted.clear();state.thrusting=false;state.events=[];$('deploymentScene').classList.remove('active');$('introModal').classList.add('show');$('helpModal').classList.remove('show');$('resultModal').classList.remove('show');$('pauseBtn').textContent='Ⅱ Pause';$('phaseLabel').textContent='MISSION CONTROL · STANDBY';$('telemetryState').textContent='STANDBY';$('telemetryState').style.color='var(--amber)';renderObjectives();renderLog();updateHUD();log('Simulation initialized. Awaiting trainee.');}
-function finishMission(){state.complete=true;state.phase='MISSION COMPLETE';state.paused=true;$('resultScore');$('finalScore').textContent=String(state.score).padStart(4,'0');$('finalTime').textContent=fmtTime(state.elapsed);$('finalHull').textContent=`${Math.round(state.hull)}%`;$('resultMessage').textContent=state.hull>70?'Excellent work. You completed the Kibo module inspection checklist while keeping the craft in safe condition.': 'Mission complete. Review your approach and try to finish with more hull integrity.';$('resultModal').classList.add('show');$('phaseLabel').textContent='MISSION COMPLETE';$('telemetryState').textContent='COMPLETE';$('telemetryState').style.color='var(--green)';log('All objectives completed. Training mission successful.','good');beep(980,.22,'triangle');}
-function scan(){if(!state.started){toast('Begin the mission first.');return}if(state.paused||state.complete)return;if(state.scanCooldown>0){toast('Scanner is recalibrating.');return}state.scanCooldown=1.3;state.battery=Math.max(0,state.battery-.3);viewport.classList.add('scanning');setTimeout(()=>viewport.classList.remove('scanning'),950);beep(670,.12);const o=currentObjective();if(o.type!=='scan'){if(o.type==='launch'||o.type==='control'){toast('Follow the current checklist objective first.');return}toast(`Current task: ${o.title}`);return}const d=targetDistance();if(d>175){toast(`Target outside scan range (${fmtNum(d)} m). Move closer.`);log(`Scan attempt rejected: target ${fmtNum(d)} m away.`,'warn');return}if(state.scanned.has(state.objective)){toast('This object has already been scanned.');return}state.scanned.add(state.objective);completeObjective(state.objective,`Scan verified: ${o.title}`);}
-function interact(){if(!state.started){toast('Begin the mission first.');return}if(state.paused||state.complete)return;const o=currentObjective();if(o.type==='launch'){toast('Complete the launch sequence first.');return}if(o.type==='control'){if(state.controlsUsed){completeObjective(state.objective,'Attitude controls calibrated');}else toast('Use the thrusters and stabilization controls first.');return}if(o.type==='scan'){toast('This objective requires a sensor scan. Press Enter.');return}const d=targetDistance();if(d>125){toast(`Too far to interact (${fmtNum(d)} m). Approach the highlighted target.`);return}if(o.type==='interact'){if(state.interacted.has(state.objective)){toast('Inspection already recorded.');return}state.interacted.add(state.objective);completeObjective(state.objective,`Inspection logged: ${o.title}`);return}if(o.type==='dock'){const speed=Math.hypot(state.vx,state.vy);const bearing=Math.abs(Math.atan2(Math.sin(Math.atan2(o.y-state.y,o.x-state.x)-state.angle),Math.cos(Math.atan2(o.y-state.y,o.x-state.x)-state.angle)));if(d>75){toast('Move closer to the docking port.');return}if(speed>20){toast('Relative speed too high. Stabilize before docking.');log('Docking hold: relative velocity exceeds safe approach limit.','warn');return}if(bearing>.75){toast('Align the nose with the docking port.');return}completeObjective(state.objective,'Soft capture confirmed. Docking complete.');}}
-function controlInput(name,dt){if(!state.started||state.paused||state.complete)return;const has=k=>state.keys.has(k)||state.held.has(k);let thrust=0,side=0,rot=0;if(has('w')||has('ArrowUp')||has('forward'))thrust+=1;if(has('s')||has('ArrowDown')||has('reverse'))thrust-=.7;if(has('q')||has('strafeLeft'))side-=.7;if(has('e')||has('strafeRight'))side+=.7;if(has('a')||has('ArrowLeft')||has('left'))rot-=1;if(has('d')||has('ArrowRight')||has('right'))rot+=1;const braking=has(' ')||has('Spacebar')||has('brake');if(thrust||side||rot)state.controlsUsed=true;state.angularVelocity+=rot*2.6*dt;state.angularVelocity*=Math.pow(.035,dt);state.angle+=state.angularVelocity*dt;const accel=30;if(thrust||side){const ax=(Math.cos(state.angle)*thrust+Math.cos(state.angle+Math.PI/2)*side)*accel;const ay=(Math.sin(state.angle)*thrust+Math.sin(state.angle+Math.PI/2)*side)*accel;state.vx+=ax*dt;state.vy+=ay*dt;state.fuel=Math.max(0,state.fuel-(Math.abs(thrust)+Math.abs(side))*.95*dt);state.thrusting=true;}else state.thrusting=false;if(braking){state.vx*=Math.pow(.035,dt);state.vy*=Math.pow(.035,dt);state.angularVelocity*=Math.pow(.01,dt);state.controlsUsed=true;}state.vx=clamp(state.vx,-95,95);state.vy=clamp(state.vy,-95,95);if(!thrust&&!side&&!braking){state.vx*=Math.pow(.32,dt);state.vy*=Math.pow(.32,dt)}state.x+=state.vx*dt;state.y+=state.vy*dt;const bounds={left:-330,right:330,top:-205,bottom:205};if(state.x<bounds.left){state.x=bounds.left;state.vx=Math.max(0,state.vx)*.12;log('Module boundary reached. Repositioning inside the Kibo training volume.','warn')}if(state.x>bounds.right){state.x=bounds.right;state.vx=Math.min(0,state.vx)*.12;log('Module boundary reached. Repositioning inside the Kibo training volume.','warn')}if(state.y<bounds.top){state.y=bounds.top;state.vy=Math.max(0,state.vy)*.12;log('Module boundary reached. Repositioning inside the Kibo training volume.','warn')}if(state.y>bounds.bottom){state.y=bounds.bottom;state.vy=Math.min(0,state.vy)*.12;log('Module boundary reached. Repositioning inside the Kibo training volume.','warn')}const speed=Math.hypot(state.vx,state.vy);if(speed>75){state.hull=Math.max(25,state.hull-(speed-75)*.008*dt);}state.battery=Math.max(0,state.battery-.012*dt);if(state.fuel<=0){state.vx*=Math.pow(.9,dt);state.vy*=Math.pow(.9,dt)}}
-function update(dt){if(!state.started||state.paused||state.complete)return;state.elapsed+=dt;state.scanCooldown=Math.max(0,state.scanCooldown-dt);if(state.phase==='LAUNCH SEQUENCE'){state.launchElapsed+=dt;const remain=Math.max(0,3-Math.floor(state.launchElapsed));$('launchCount').textContent=remain||'LIFTOFF';$('launchCount').classList.add('show');$('phaseLabel').textContent=`LAUNCH SEQUENCE · T−${String(remain).padStart(2,'0')}`;if(state.launchElapsed>=3){$('launchCount').classList.remove('show');$('deploymentScene').classList.remove('active');$('deploymentStatus').textContent='DEPLOYMENT COMPLETE';state.phase='IN PROGRESS';$('phaseLabel').textContent='KIBO MODULE · ROBOT OPERATIONS ACTIVE';state.done.add(0);state.objective=1;addScore(100,'Int-Ball2 deployment complete');log('Int-Ball2 deployment confirmed. Kibo module navigation is now active.','good');toast('Robot deployed. Calibrate attitude controls to begin checkpoint navigation.');beep(740,.2,'triangle');renderObjectives();}return}controlInput(null,dt);if(state.objective===1&&state.controlsUsed&&Math.hypot(state.vx,state.vy)<45&&Math.abs(state.angularVelocity)<.2&&state.elapsed>4){completeObjective(1,'Attitude control calibration passed');}if(state.battery<=0){state.phase='POWER CONSERVATION';$('systems').textContent='LOW POWER';$('systems').style.color='var(--amber)'}if(state.fuel<15){$('fuelText').style.color='var(--amber)'}else $('fuelText').style.color='';if(state.hull<50){$('hullText').style.color='var(--red)';$('systems').textContent='CHECK HULL';$('systems').style.color='var(--red)'}else $('hullText').style.color='';}
-function resizeCanvas(c,context){const rect=c.getBoundingClientRect();const dpr=Math.min(window.devicePixelRatio||1,2);const w=Math.max(1,rect.width),h=Math.max(1,rect.height);if(c.width!==Math.round(w*dpr)||c.height!==Math.round(h*dpr)){c.width=Math.round(w*dpr);c.height=Math.round(h*dpr)}context.setTransform(dpr,0,0,dpr,0,0);return{w,h};}
-function drawBackground(c,w,h){const g=c.createLinearGradient(0,0,0,h);g.addColorStop(0,'#101e2c');g.addColorStop(.48,'#26394a');g.addColorStop(1,'#0b1420');c.fillStyle=g;c.fillRect(0,0,w,h);const vanX=w*.5,vanY=h*.39;c.fillStyle='#0b1521';c.beginPath();c.moveTo(0,0);c.lineTo(w,0);c.lineTo(w*.77,h*.2);c.lineTo(w*.23,h*.2);c.closePath();c.fill();c.fillStyle='#344a5b';c.beginPath();c.moveTo(0,0);c.lineTo(w*.23,h*.2);c.lineTo(w*.23,h*.78);c.lineTo(0,h);c.closePath();c.fill();c.beginPath();c.moveTo(w,0);c.lineTo(w*.77,h*.2);c.lineTo(w*.77,h*.78);c.lineTo(w,h);c.closePath();c.fill();c.fillStyle='#192b3b';c.beginPath();c.moveTo(0,h);c.lineTo(w*.23,h*.78);c.lineTo(w*.77,h*.78);c.lineTo(w,h);c.closePath();c.fill();c.fillStyle='#263b4d';c.beginPath();c.moveTo(w*.23,h*.2);c.lineTo(w*.77,h*.2);c.lineTo(w*.77,h*.78);c.lineTo(w*.23,h*.78);c.closePath();c.fill();for(let i=0;i<8;i++){const t=i/7,x=w*(.23+t*.54);c.strokeStyle=i%2?'#526b7d':'#162b3b';c.lineWidth=2;c.beginPath();c.moveTo(x,h*.2);c.lineTo(x,h*.78);c.stroke();}for(let i=0;i<5;i++){const yy=h*(.25+i*.105);c.strokeStyle='#8ba0ad';c.globalAlpha=.32;c.lineWidth=1;c.beginPath();c.moveTo(w*.24,yy);c.lineTo(w*.76,yy);c.stroke();c.globalAlpha=1;}c.fillStyle='#b6c9d2';c.fillRect(w*.39,h*.09,w*.22,h*.025);c.fillStyle='#5de8ff';c.fillRect(w*.405,h*.097,w*.19,h*.006);c.fillStyle='#a3b7c5';c.font='bold '+Math.max(10,w*.014)+'px ui-monospace,monospace';c.textAlign='center';c.fillText('JAPANESE EXPERIMENT MODULE · KIBO',w*.5,h*.16);for(let side=0;side<2;side++){const x=side?w*.79:w*.055;for(let j=0;j<3;j++){const yy=h*(.28+j*.19);const ww=w*.13,hh=h*.14;c.fillStyle='#152838';c.fillRect(x,yy,ww,hh);c.strokeStyle='#9db2bf';c.lineWidth=2;c.strokeRect(x,yy,ww,hh);for(let k=0;k<3;k++){c.fillStyle=['#3e6679','#35566a','#476b7d'][k];c.fillRect(x+ww*.09,yy+hh*(.12+k*.27),ww*.82,hh*.19);c.fillStyle=k===1?'#63edda':'#6bd8f4';c.fillRect(x+ww*.77,yy+hh*(.17+k*.27),ww*.06,hh*.08);}}}c.fillStyle='#d6e4e8';c.font='bold 10px ui-monospace,monospace';c.textAlign='left';c.fillText('RACK A-01',w*.06,h*.27);c.textAlign='right';c.fillText('RACK B-02',w*.94,h*.27);c.strokeStyle='#d3e3e8';c.lineWidth=4;c.beginPath();c.moveTo(w*.23,h*.78);c.lineTo(w*.77,h*.78);c.stroke();c.strokeStyle='#6b8495';c.lineWidth=1;c.strokeRect(w*.33,h*.82,w*.34,h*.08);c.fillStyle='#7ff0ff';c.fillRect(w*.46,h*.845,w*.08,h*.008);c.fillStyle='#d2e4eb';c.font='9px ui-monospace,monospace';c.textAlign='center';c.fillText('FLOOR RAIL / SERVICE TRACK',w*.5,h*.94);}
-function worldToScreen(wx,wy,w,h){const scale=Math.min(w/900,h/560);return{x:w/2+wx*scale,y:h/2+wy*scale,scale};}
-function drawEarth(c,w,h){}
-function drawStation(c,w,h){const p=(x,y)=>worldToScreen(x,y,w,h);const rack= p(520,70);c.save();c.translate(rack.x,rack.y);c.fillStyle='#142737';c.strokeStyle='#b4cad4';c.lineWidth=2;c.fillRect(-27,-44,54,88);c.strokeRect(-27,-44,54,88);for(let j=0;j<4;j++){c.fillStyle=j%2?'#426579':'#2a485c';c.fillRect(-20,-35+j*19,40,14);c.fillStyle='#64f1e3';c.fillRect(13,-31+j*19,4,6);c.fillStyle='#e0edf0';c.font='7px ui-monospace,monospace';c.fillText('A'+(j+1),-15,-25+j*19)}c.restore();const hatch=p(180,260);c.save();c.translate(hatch.x,hatch.y);c.fillStyle='#344e60';c.strokeStyle='#d3e4ea';c.lineWidth=3;c.beginPath();c.roundRect(-38,-30,76,60,10);c.fill();c.stroke();c.strokeStyle='#7ff0ff';c.lineWidth=2;c.beginPath();c.arc(0,0,19,0,Math.PI*2);c.stroke();c.fillStyle='#7ff0ff';c.fillRect(-5,-3,10,6);c.restore();const rack2=p(-280,170);c.fillStyle='#2b485c';c.strokeStyle='#b2c9d5';c.lineWidth=2;c.fillRect(rack2.x-25,rack2.y-40,50,80);c.strokeRect(rack2.x-25,rack2.y-40,50,80);for(let j=0;j<3;j++){c.fillStyle='#6adbe8';c.fillRect(rack2.x-16,rack2.y-29+j*22,32,9)}const joint=p(320,-140);c.strokeStyle='#e1edf2';c.lineWidth=5;c.beginPath();c.moveTo(joint.x-19,joint.y);c.lineTo(joint.x+19,joint.y);c.moveTo(joint.x,joint.y-19);c.lineTo(joint.x,joint.y+19);c.stroke();c.fillStyle='#66f4e2';c.beginPath();c.arc(joint.x,joint.y,5,0,Math.PI*2);c.fill();const dock=p(-390,-230);c.save();c.translate(dock.x,dock.y);c.strokeStyle='#c3d7e0';c.lineWidth=7;c.beginPath();c.arc(0,0,31,0,Math.PI*2);c.stroke();c.strokeStyle='#5feaff';c.lineWidth=2;c.beginPath();c.arc(0,0,19,0,Math.PI*2);c.stroke();c.restore();}
-function drawTarget(c,w,h){if(state.objective>=OBJECTIVES.length)return;const o=currentObjective();const pos=worldToScreen(o.x,o.y,w,h);const pulse=1+Math.sin(state.elapsed*4)*.12;c.save();c.strokeStyle='#5feaff';c.globalAlpha=.85;c.lineWidth=1.5;c.setLineDash([5,5]);c.beginPath();c.arc(pos.x,pos.y,30*pulse,0,Math.PI*2);c.stroke();c.setLineDash([]);c.beginPath();c.moveTo(pos.x-42,pos.y);c.lineTo(pos.x-25,pos.y);c.moveTo(pos.x+25,pos.y);c.lineTo(pos.x+42,pos.y);c.moveTo(pos.x,pos.y-42);c.lineTo(pos.x,pos.y-25);c.moveTo(pos.x,pos.y+25);c.lineTo(pos.x,pos.y+42);c.stroke();c.font='bold 10px ui-monospace,monospace';c.fillStyle='#9af4ff';c.textAlign='center';c.fillText(`TARGET ${String(state.objective+1).padStart(2,'0')}`,pos.x,pos.y-39);c.restore();}
-function drawCraft(c,w,h){const craftPos=worldToScreen(state.x,state.y,w,h);const x=craftPos.x,y=craftPos.y;const angle=state.angle;c.save();c.translate(x,y);c.rotate(angle);if(state.thrusting&&state.fuel>0){const flame=c.createLinearGradient(-14,0,-46,0);flame.addColorStop(0,'#e9ffff');flame.addColorStop(.45,'#5deaff');flame.addColorStop(1,'#526eff00');c.fillStyle=flame;c.beginPath();c.moveTo(-12,-6);c.lineTo(-48,0);c.lineTo(-12,6);c.closePath();c.fill()}c.shadowColor='#5deaff';c.shadowBlur=22;const g=c.createRadialGradient(-7,-8,2,0,0,25);g.addColorStop(0,'#ffffff');g.addColorStop(.35,'#d7e6eb');g.addColorStop(.75,'#8199aa');g.addColorStop(1,'#31495d');c.fillStyle=g;c.strokeStyle='#effcff';c.lineWidth=2;c.beginPath();c.arc(0,0,23,0,Math.PI*2);c.fill();c.stroke();c.shadowBlur=0;c.fillStyle='#172d40';c.beginPath();c.arc(7,-2,10,0,Math.PI*2);c.fill();c.strokeStyle='#6deeff';c.lineWidth=2;c.beginPath();c.arc(7,-2,7,0,Math.PI*2);c.stroke();c.fillStyle='#06111d';c.beginPath();c.arc(7,-2,4,0,Math.PI*2);c.fill();c.fillStyle='#d7e7ee';c.beginPath();c.arc(-10,10,4,0,Math.PI*2);c.fill();c.strokeStyle='#9db8c7';c.lineWidth=1;c.beginPath();c.moveTo(-13,-13);c.lineTo(-19,-19);c.moveTo(-13,13);c.lineTo(-19,19);c.stroke();c.fillStyle='#65efdc';c.fillRect(-19,-21,6,3);c.fillRect(-19,18,6,3);c.restore();}
-function drawVelocity(c,w,h){const craftPos=worldToScreen(state.x,state.y,w,h);const x=craftPos.x,y=craftPos.y;const speed=Math.hypot(state.vx,state.vy);if(speed>3){c.save();c.strokeStyle='#ffdb7c';c.globalAlpha=.7;c.setLineDash([3,4]);c.beginPath();c.moveTo(x,y);c.lineTo(x-state.vx*.24,y-state.vy*.24);c.stroke();c.setLineDash([]);c.restore()}}
-function drawSpace(){const {w,h}=resizeCanvas(canvas,ctx);drawBackground(ctx,w,h);drawStation(ctx,w,h);drawTarget(ctx,w,h);drawVelocity(ctx,w,h);drawCraft(ctx,w,h);if(!state.started){ctx.fillStyle='#d5e7ef';ctx.font='12px ui-monospace,monospace';ctx.textAlign='center';ctx.fillText('KIBO MODULE · MISSION STANDBY',w/2,h*.69)}}
-function drawRadar(){const{w,h}=resizeCanvas(radar,rctx);rctx.fillStyle='#050b17';rctx.fillRect(0,0,w,h);const cx=w/2,cy=h/2,rad=Math.min(w,h)*.42;rctx.strokeStyle='#20364f';rctx.lineWidth=1;for(let i=1;i<=3;i++){rctx.beginPath();rctx.arc(cx,cy,rad*i/3,0,Math.PI*2);rctx.stroke()}rctx.beginPath();rctx.moveTo(cx,cy-rad);rctx.lineTo(cx,cy+rad);rctx.moveTo(cx-rad,cy);rctx.lineTo(cx+rad,cy);rctx.stroke();rctx.save();rctx.beginPath();rctx.rect(0,0,w,h);rctx.clip();const scale=rad/680;const target=targetFor();const tx=cx+target.x*scale,ty=cy+target.y*scale;rctx.fillStyle='#ffd479';rctx.shadowColor='#ffd479';rctx.shadowBlur=8;rctx.beginPath();rctx.arc(tx,ty,4,0,Math.PI*2);rctx.fill();rctx.shadowBlur=0;rctx.strokeStyle='#5feaff';rctx.lineWidth=2;rctx.beginPath();rctx.moveTo(cx+state.x*scale,cy+state.y*scale);rctx.lineTo(cx+state.x*scale+Math.cos(state.angle)*12,cy+state.y*scale+Math.sin(state.angle)*12);rctx.stroke();rctx.strokeStyle='#ff6b7a';rctx.lineWidth=1.5;rctx.strokeRect(cx-rad*.92,cy-rad*.62,rad*1.84,rad*1.24);rctx.fillStyle='#5feaff';rctx.beginPath();rctx.arc(cx+(state.x)*scale,cy+(state.y)*scale,4,0,Math.PI*2);rctx.fill();rctx.restore();}
-function updateHUD(){const speed=Math.hypot(state.vx,state.vy);const d=targetDistance();$('hudTime').textContent=fmtTime(state.elapsed);$('hudVelocity').textContent=`${speed.toFixed(1)} m/s`;$('hudRange').textContent=`${fmtNum(d)} m`;$('fuelText').textContent=`${Math.round(state.fuel)}%`;$('batteryText').textContent=`${Math.round(state.battery)}%`;$('hullText').textContent=`${Math.round(state.hull)}%`;$('scoreText').textContent=String(state.score).padStart(4,'0');$('fuelBar').style.width=`${state.fuel}%`;$('batteryBar').style.width=`${state.battery}%`;$('hullBar').style.width=`${state.hull}%`;$('scoreBar').style.width=`${clamp(state.score/20,0,100)}%`;$('altitude').textContent=`${(408+Math.sin(state.x/1000)*.7).toFixed(1)} km`;$('speed').textContent=`${speed.toFixed(1)} m/s`;$('attitude').textContent=`${String(Math.round(wrapAngle(state.angle)*180/Math.PI)).padStart(3,'0')}°`;$('bearing').textContent=`${String(Math.round(wrapAngle(Math.atan2(targetFor().y-state.y,targetFor().x-state.x))*180/Math.PI)).padStart(3,'0')}°`;$('signal').textContent=`${Math.round(clamp(100-d/80,12,99))}%`;$('phaseLabel').textContent=state.phase==='IN PROGRESS'?'ORBITAL OPERATIONS · ACTIVE':state.phase==='LAUNCH SEQUENCE'?`LAUNCH SEQUENCE · T−${String(Math.max(0,3-Math.floor(state.launchElapsed))).padStart(2,'0')}`:state.phase;$('telemetryState').textContent=state.phase;$('systems').textContent=state.hull<50?'CHECK HULL':state.battery<20?'LOW POWER':'NOMINAL';}
-function frame(now){const dt=Math.min(.04,Math.max(0,(now-state.lastFrame)/1000||0));state.lastFrame=now;update(dt);drawSpace();drawRadar();if(state.started&&Math.floor(state.elapsed*5)%2===0)updateHUD();requestAnimationFrame(frame)}
-function togglePause(){if(!state.started||state.complete)return;state.paused=!state.paused;$('pauseBtn').textContent=state.paused?'▶ Resume':'Ⅱ Pause';if(state.paused){state.phase='PAUSED';log('Simulation paused by trainee.');}else{state.phase='IN PROGRESS';state.lastFrame=performance.now();log('Simulation resumed.');}updateHUD();}
-function bindHold(button,name){const down=e=>{e.preventDefault();state.held.add(name);button.classList.add('primary');};const up=e=>{e.preventDefault();state.held.delete(name);button.classList.remove('primary');};button.addEventListener('pointerdown',down);button.addEventListener('pointerup',up);button.addEventListener('pointercancel',up);button.addEventListener('pointerleave',up);}
-document.querySelectorAll('[data-control]').forEach(b=>bindHold(b,b.dataset.control));
-window.addEventListener('keydown',e=>{const key=e.key===' '?' ':e.key;if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(key))e.preventDefault();if(e.repeat&&['Enter','f','F','p','P'].includes(key))return;state.keys.add(key);if(key==='Enter')scan();if(key==='f'||key==='F')interact();if(key==='p'||key==='P')togglePause();if(key==='Escape'){if($('helpModal').classList.contains('show'))$('helpModal').classList.remove('show');else if(state.started)togglePause();}});
-window.addEventListener('keyup',e=>state.keys.delete(e.key===' '?' ':e.key));window.addEventListener('blur',()=>{state.keys.clear();state.held.clear()});
-$('startBtn').addEventListener('click',startMission);$('briefingBtn').addEventListener('click',()=>{$('introModal').classList.remove('show');$('helpModal').classList.add('show');state.showHelpAfterStart=true});$('helpBtn').addEventListener('click',()=>$('helpModal').classList.add('show'));$('closeHelp').addEventListener('click',()=>{$('helpModal').classList.remove('show');if(state.showHelpAfterStart){state.showHelpAfterStart=false;$('introModal').classList.add('show')}});$('scanBtn').addEventListener('click',scan);$('interactBtn').addEventListener('click',interact);$('pauseBtn').addEventListener('click',togglePause);$('resetBtn').addEventListener('click',resetMission);$('againBtn').addEventListener('click',resetMission);$('reportBtn').addEventListener('click',()=>{$('resultModal').classList.remove('show');toast(`Debrief: score ${state.score}, hull ${Math.round(state.hull)}%, flight time ${fmtTime(state.elapsed)}.`)});$('soundBtn').addEventListener('click',()=>{state.sound=!state.sound;$('soundBtn').textContent=`Sound: ${state.sound?'On':'Off'}`;$('soundBtn').setAttribute('aria-pressed',String(state.sound));if(state.sound)beep(650,.1)});
-window.addEventListener('resize',()=>{drawSpace();drawRadar()});
-renderObjectives();log('Simulation initialized. Awaiting trainee.');updateHUD();state.lastFrame=performance.now();requestAnimationFrame(frame);
-})();
+const ROOM_FIXTURES = [
+  { type: 'rack', x: 245, y: 300, w: 104, h: 170, label: 'EXP RACK 01' },
+  { type: 'rack', x: 440, y: 110, w: 84, h: 190, label: 'EXP RACK 02' },
+  { type: 'rack', x: 660, y: 360, w: 116, h: 185, label: 'EXP RACK 03' },
+  { type: 'rack', x: 900, y: 270, w: 82, h: 150, label: 'EXP RACK 04' },
+  { type: 'cabinet', x: 520, y: 340, w: 82, h: 74, label: 'CONTROL' },
+  { type: 'cabinet', x: 740, y: 120, w: 66, h: 72, label: 'UTILITY' },
+  { type: 'hatch', x: 575, y: 530, w: 86, h: 22, label: 'HATCH' },
+  { type: 'pipe', x: 330, y: 545, w: 170, h: 14, label: '' },
+  { type: 'pipe', x: 780, y: 560, w: 140, h: 12, label: '' },
+  { type: 'panel', x: 160, y: 130, w: 120, h: 42, label: 'AIR MONITOR' },
+  { type: 'panel', x: 940, y: 555, w: 120, h: 40, label: 'SENSOR BAY' }
+];
+const state = {
+  started: false,
+  launching: false,
+  launchStart: 0,
+  completed: false,
+  paused: false,
+  elapsed: 0,
+  lastFrame: 0,
+  timeLimit: CONFIG.missionTimeLimit,
+  battery: 100,
+  score: 0,
+  scans: 0,
+  logs: [],
+  targetIndex: 0,
+  flash: 0,
+  shake: 0,
+  scanAnimation: 0,
+  scanPulse: 0,
+  toastId: 0,
+  lastUiUpdate: 0,
+  scanLock: false,
+  scanFeedback: '',
+  player: { x: 125, y: 360, vx: 0, vy: 0, angle: 0, radius: 15, trail: [], lastX: 125, lastY: 360 },
+  keys: new Set(),
+  touch: { up: false, down: false, left: false, right: false },
+  particles: [],
+  stars: [],
+  scanResults: [],
+  lastTargetId: null,
+  bestAlignment: 180,
+  missionStartWallTime: 0
+};
+let canvasWidth = 1200;
+let canvasHeight = 720;
+let pixelRatio = 1;
+let audioContext = null;
+let ambientOscillator = null;
+let ambientGain = null;
+let muted = true;
+
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function lerp(a, b, amount) {
+  return a + (b - a) * amount;
+}
+
+function distance(a, b) {
+  return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
+function normalizeAngle(angle) {
+  let result = angle % (Math.PI * 2);
+  if (result < 0) result += Math.PI * 2;
+  return result;
+}
+
+function angleDifference(a, b) {
+  let difference = normalizeAngle(a - b);
+  if (difference > Math.PI) difference -= Math.PI * 2;
+  return difference;
+}
+
+function formatTime(seconds) {
+  const safe = Math.max(0, Math.floor(seconds));
+  const minutes = Math.floor(safe / 60).toString().padStart(2, '0');
+  const remaining = (safe % 60).toString().padStart(2, '0');
+  return `${minutes}:${remaining}`;
+}
+
+function formatHeading(angle) {
+  return `${Math.round(normalizeAngle(angle) * 180 / Math.PI).toString().padStart(3, '0')}°`;
+}
+
+function currentTarget() {
+  if (state.completed) return null;
+  return TARGETS[state.targetIndex] || null;
+}
+
+function currentTargetDistance() {
+  const target = currentTarget();
+  return target ? distance(state.player, target) : Infinity;
+}
+
+function currentAlignment(target = currentTarget()) {
+  if (!target) return 180;
+  return Math.abs(angleDifference(state.player.angle, target.heading)) * 180 / Math.PI;
+}
+
+function alignmentLabel(value) {
+  if (value < 10) return 'EXCELLENT';
+  if (value < 25) return 'GOOD';
+  if (value < 48) return 'ADJUST';
+  return 'MISALIGNED';
+}
+
+function resizeCanvas() {
+  const rect = canvas.getBoundingClientRect();
+  pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
+  canvasWidth = Math.max(320, rect.width);
+  canvasHeight = Math.max(300, rect.height);
+  canvas.width = Math.floor(canvasWidth * pixelRatio);
+  canvas.height = Math.floor(canvasHeight * pixelRatio);
+  ctx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+  ctx.imageSmoothingEnabled = true;
+  render();
+}
+
+function worldScale() {
+  const horizontal = (canvasWidth - 80) / WORLD.width;
+  const vertical = (canvasHeight - 100) / WORLD.height;
+  return Math.max(0.35, Math.min(horizontal, vertical));
+}
+
+function worldOffset() {
+  const scale = worldScale();
+  return {
+    x: (canvasWidth - WORLD.width * scale) / 2,
+    y: (canvasHeight - WORLD.height * scale) / 2
+  };
+}
+
+function toScreen(point) {
+  const scale = worldScale();
+  const offset = worldOffset();
+  return { x: offset.x + point.x * scale, y: offset.y + point.y * scale };
+}
+
+function toWorld(point) {
+  const scale = worldScale();
+  const offset = worldOffset();
+  return { x: (point.x - offset.x) / scale, y: (point.y - offset.y) / scale };
+}
+
+function initStars() {
+  state.stars = [];
+  for (let index = 0; index < 110; index += 1) {
+    state.stars.push({
+      x: Math.random(),
+      y: Math.random(),
+      size: Math.random() * 1.5 + 0.3,
+      alpha: Math.random() * 0.38 + 0.08,
+      phase: Math.random() * Math.PI * 2
+    });
+  }
+}
+
+function initParticles() {
+  state.particles = [];
+  for (let index = 0; index < 38; index += 1) {
+    state.particles.push({
+      x: Math.random() * WORLD.width,
+      y: Math.random() * WORLD.height,
+      radius: Math.random() * 2.2 + 0.5,
+      drift: Math.random() * 10 + 2,
+      phase: Math.random() * Math.PI * 2
+    });
+  }
+}
+
+function addLog(message, type = 'normal') {
+  const stamp = state.started ? formatTime(state.elapsed) : '00:00';
+  state.logs.unshift({ stamp, message, type });
+  state.logs = state.logs.slice(0, 35);
+  renderLog();
+}
+
+function renderLog() {
+  UI.log.replaceChildren();
+  state.logs.forEach(entry => {
+    const row = document.createElement('div');
+    row.className = `log-entry ${entry.type}`;
+    const time = document.createElement('span');
+    time.className = 'log-time';
+    time.textContent = entry.stamp;
+    const message = document.createElement('span');
+    message.className = 'log-message';
+    message.textContent = entry.message;
+    row.append(time, message);
+    UI.log.append(row);
+  });
+  UI.logCount.textContent = `${state.logs.length.toString().padStart(2, '0')} events`;
+}
+
+function showToast(message, type = 'normal', duration = 3000) {
+  const toast = document.createElement('div');
+  toast.className = `toast ${type}`;
+  toast.textContent = message;
+  UI.toastStack.append(toast);
+  window.setTimeout(() => toast.remove(), duration);
+}
+
+function showModal(title, content) {
+  UI.modalTitle.textContent = title;
+  UI.modalContent.replaceChildren();
+  if (typeof content === 'string') {
+    const wrapper = document.createElement('div');
+    wrapper.innerHTML = content;
+    UI.modalContent.append(wrapper);
+  } else if (content instanceof Node) {
+    UI.modalContent.append(content);
+  }
+  UI.modalBackdrop.classList.add('visible');
+  UI.modalBackdrop.dataset.open = 'true';
+  UI.modalClose.focus();
+}
+
+function closeModal() {
+  UI.modalBackdrop.classList.remove('visible');
+  delete UI.modalBackdrop.dataset.open;
+  canvas.focus({ preventScroll: true });
+}
+
+function addTextBlock(parent, heading, text) {
+  const title = document.createElement('h3');
+  title.textContent = heading;
+  const paragraph = document.createElement('p');
+  paragraph.textContent = text;
+  parent.append(title, paragraph);
+}
+
+function showHelp() {
+  const fragment = document.createDocumentFragment();
+  addTextBlock(fragment, 'Movement', 'Use W/A/S/D or the arrow keys to move through the module. The controls are relative to the room, not to the direction the drone faces. Use the left and right arrow keys to rotate your heading. Movement slows near walls and racks.');
+  addTextBlock(fragment, 'Scan a checkpoint', 'Move within roughly 90 world units of the highlighted checkpoint. Face the target heading shown in telemetry; a low angular error gives a better scan score. Press F or E to scan. The scan button also works when you are in range.');
+  addTextBlock(fragment, 'Mission sequence', 'Release at the docking station, scan each highlighted AR marker in order, then return to the goal checkpoint. The objective list updates automatically after a successful scan.');
+  addTextBlock(fragment, 'Recovery', 'If you are stuck near a target, press R to stabilize, rotate using the arrows, and move away before approaching again. Press H to reopen this guide. Restart Mission resets the route.');
+  showModal('Pilot help & controls', fragment);
+}
+
+function showRouteBriefing() {
+  const fragment = document.createDocumentFragment();
+  addTextBlock(fragment, 'Mission task', 'Inspect the illustrated Kibo module checkpoints and return to the goal. This practice route is fictionalized for gameplay; it does not represent official checkpoint coordinates.');
+  const list = document.createElement('ul');
+  TARGETS.forEach((target, index) => {
+    const item = document.createElement('li');
+    item.textContent = `${index + 1}. ${target.name} — ${target.description}`;
+    list.append(item);
+  });
+  fragment.append(list);
+  addTextBlock(fragment, 'Scoring', 'Score is based on successful checkpoint registration, distance from the target, heading alignment, and movement speed during scanning. The displayed score is a training estimate.');
+  showModal('Route briefing', fragment);
+}
+
+function renderObjectives() {
+  UI.objectives.replaceChildren();
+  TARGETS.forEach((target, index) => {
+    const item = document.createElement('div');
+    const complete = index < state.targetIndex || state.completed;
+    const active = index === state.targetIndex && !state.completed;
+    item.className = `objective-item${active ? ' active' : ''}${complete ? ' complete' : ''}`;
+    const icon = document.createElement('div');
+    icon.className = 'objective-icon';
+    icon.textContent = complete ? '✓' : target.icon;
+    const copy = document.createElement('div');
+    const name = document.createElement('div');
+    name.className = 'objective-name';
+    name.textContent = target.name;
+    const hint = document.createElement('div');
+    hint.className = 'objective-hint';
+    hint.textContent = complete ? 'Checkpoint registered' : target.hint;
+    copy.append(name, hint);
+    const status = document.createElement('div');
+    status.className = 'objective-state';
+    status.textContent = complete ? 'Done' : active ? 'Current' : 'Queued';
+    item.append(icon, copy, status);
+    UI.objectives.append(item);
+  });
+  const done = state.completed ? TARGETS.length : state.targetIndex;
+  const percentage = Math.round(done / TARGETS.length * 100);
+  UI.objectiveCounter.textContent = `${done} / ${TARGETS.length}`;
+  UI.progressPercent.textContent = `${percentage}%`;
+  UI.progress.style.width = `${percentage}%`;
+}
+
+function updateTelemetry() {
+  const player = state.player;
+  const speed = Math.hypot(player.vx, player.vy);
+  const target = currentTarget();
+  const alignment = currentAlignment(target);
+  UI.coordinates.textContent = `X ${player.x.toFixed(1)} · Y ${player.y.toFixed(1)} · HDG ${formatHeading(player.angle)}`;
+  UI.telemetryX.textContent = `${player.x.toFixed(2)} m`;
+  UI.telemetryY.textContent = `${player.y.toFixed(2)} m`;
+  UI.telemetryHeading.textContent = `${(normalizeAngle(player.angle) * 180 / Math.PI).toFixed(1)}°`;
+  UI.telemetryAlignment.textContent = target ? `${alignment.toFixed(1)}° · ${alignmentLabel(alignment)}` : 'COMPLETE';
+  UI.batteryText.textContent = `${Math.ceil(state.battery)}%`;
+  UI.batteryFill.style.width = `${state.battery}%`;
+  UI.batteryFill.style.background = state.battery < 20 ? 'var(--red)' : state.battery < 45 ? 'var(--amber)' : 'var(--green)';
+  UI.speed.textContent = (speed / 100).toFixed(1);
+  UI.timer.textContent = formatTime(state.elapsed);
+  UI.scannerStatus.textContent = state.scanAnimation > 0 ? 'SCANNING' : 'STANDBY';
+  UI.scan.textContent = state.scanAnimation > 0 ? '◌ SCANNING MARKER' : '● SCANNER STANDBY';
+  UI.location.textContent = state.completed ? 'MISSION COMPLETE' : target ? target.name.toUpperCase() : 'KIBO PRESSURIZED MODULE';
+  UI.alert.textContent = state.completed ? 'ALL CHECKPOINTS REGISTERED\nROUTE SUBMITTED' : target ? `NEXT: ${target.name.toUpperCase()}\n${currentTargetDistance() < CONFIG.scanRadius ? 'TARGET IN RANGE' : 'NAVIGATE TO HIGHLIGHTED MARKER'}` : 'AWAITING MISSION';
+  updateTargetBanner();
+}
+
+function updateTargetBanner() {
+  const target = currentTarget();
+  if (!state.started || !target || state.completed) {
+    UI.targetBanner.classList.remove('visible');
+    return;
+  }
+  const targetDistance = currentTargetDistance();
+  const alignment = currentAlignment(target);
+  if (targetDistance <= CONFIG.scanRadius * 1.25) {
+    UI.targetBanner.classList.add('visible');
+    UI.targetTitle.textContent = targetDistance <= CONFIG.scanRadius ? `${target.name} · IN RANGE` : `${target.name} · APPROACH`;
+    UI.targetText.textContent = targetDistance <= CONFIG.scanRadius ? `Distance ${targetDistance.toFixed(0)} units · Alignment ${alignment.toFixed(0)}°` : `Move ${Math.max(0, targetDistance - CONFIG.scanRadius).toFixed(0)} more units toward the marker.`;
+    UI.targetButton.textContent = targetDistance <= CONFIG.scanRadius ? 'SCAN TARGET' : 'TARGET AHEAD';
+    UI.targetButton.disabled = targetDistance > CONFIG.scanRadius;
+  } else {
+    UI.targetBanner.classList.remove('visible');
+  }
+}
+
+function drawBackground(time) {
+  const gradient = ctx.createLinearGradient(0, 0, canvasWidth, canvasHeight);
+  gradient.addColorStop(0, '#071522');
+  gradient.addColorStop(.52, '#0a1c2b');
+  gradient.addColorStop(1, '#040b14');
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+  state.stars.forEach(star => {
+    const alpha = star.alpha * (.72 + Math.sin(time * .001 + star.phase) * .28);
+    ctx.fillStyle = `rgba(140,214,255,${alpha})`;
+    ctx.fillRect(star.x * canvasWidth, star.y * canvasHeight, star.size, star.size);
+  });
+  const scale = worldScale();
+  const offset = worldOffset();
+  ctx.save();
+  ctx.translate(offset.x, offset.y);
+  ctx.scale(scale, scale);
+  state.particles.forEach(particle => {
+    const y = (particle.y + Math.sin(time * .0002 + particle.phase) * particle.drift + WORLD.height) % WORLD.height;
+    ctx.fillStyle = 'rgba(114,184,214,.14)';
+    ctx.beginPath();
+    ctx.arc(particle.x, y, particle.radius, 0, Math.PI * 2);
+    ctx.fill();
+  });
+  ctx.restore();
+}
+
+function roundedRect(context, x, y, width, height, radius) {
+  const r = Math.min(radius, width / 2, height / 2);
+  context.beginPath();
+  context.moveTo(x + r, y);
+  context.arcTo(x + width, y, x + width, y + height, r);
+  context.arcTo(x + width, y + height, x, y + height, r);
+  context.arcTo(x, y + height, x, y, r);
+  context.arcTo(x, y, x + width, y, r);
+  context.closePath();
+}
+
+function drawRoom(time) {
+  const scale = worldScale();
+  const offset = worldOffset();
+  ctx.save();
+  ctx.translate(offset.x, offset.y);
+  ctx.scale(scale, scale);
+  const x = 0;
+  const y = 0;
+  const w = WORLD.width;
+  const h = WORLD.height;
+  const floor = ctx.createLinearGradient(0, 0, w, h);
+  floor.addColorStop(0, '#142b3c');
+  floor.addColorStop(.5, '#0e2232');
+  floor.addColorStop(1, '#0a1928');
+  ctx.fillStyle = floor;
+  roundedRect(ctx, x, y, w, h, 42);
+  ctx.fill();
+  ctx.save();
+  roundedRect(ctx, x + 2, y + 2, w - 4, h - 4, 40);
+  ctx.clip();
+  ctx.strokeStyle = 'rgba(113,191,224,.08)';
+  ctx.lineWidth = 1;
+  for (let gx = 0; gx <= w; gx += WORLD.grid) {
+    ctx.beginPath();
+    ctx.moveTo(gx, 0);
+    ctx.lineTo(gx, h);
+    ctx.stroke();
+  }
+  for (let gy = 0; gy <= h; gy += WORLD.grid) {
+    ctx.beginPath();
+    ctx.moveTo(0, gy);
+    ctx.lineTo(w, gy);
+    ctx.stroke();
+  }
+  drawFloorPanels(time);
+  drawWallRibs();
+  ROOM_FIXTURES.forEach(fixture => drawFixture(fixture, time));
+  drawDockingArea();
+  drawRouteLine();
+  drawTargets(time);
+  drawPlayer(time);
+  drawParticlesInRoom(time);
+  ctx.restore();
+  drawRoomBorder();
+  ctx.restore();
+}
+
+function drawFloorPanels(time) {
+  ctx.save();
+  ctx.lineWidth = 2;
+  for (let index = 0; index < 12; index += 1) {
+    const x = 25 + index * 100;
+    ctx.strokeStyle = index % 2 === 0 ? 'rgba(122,197,223,.08)' : 'rgba(122,197,223,.04)';
+    ctx.beginPath();
+    ctx.moveTo(x, 28);
+    ctx.lineTo(x, WORLD.height - 28);
+    ctx.stroke();
+  }
+  for (let index = 0; index < 6; index += 1) {
+    const y = 45 + index * 125;
+    ctx.strokeStyle = 'rgba(122,197,223,.045)';
+    ctx.beginPath();
+    ctx.moveTo(25, y);
+    ctx.lineTo(WORLD.width - 25, y);
+    ctx.stroke();
+  }
+  const glow = ctx.createRadialGradient(580, 350, 20, 580, 350, 460);
+  glow.addColorStop(0, `rgba(39,132,173,${.05 + Math.sin(time * .001) * .012})`);
+  glow.addColorStop(1, 'rgba(5,13,22,0)');
+  ctx.fillStyle = glow;
+  ctx.fillRect(0, 0, WORLD.width, WORLD.height);
+  ctx.restore();
+}
+
+function drawWallRibs() {
+  ctx.save();
+  for (let index = 0; index < 13; index += 1) {
+    const x = 32 + index * 94;
+    const gradient = ctx.createLinearGradient(x - 4, 0, x + 4, 0);
+    gradient.addColorStop(0, 'rgba(4,10,17,.3)');
+    gradient.addColorStop(.5, 'rgba(131,189,212,.12)');
+    gradient.addColorStop(1, 'rgba(4,10,17,.35)');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(x - 4, 8, 8, WORLD.height - 16);
+  }
+  for (let index = 0; index < 8; index += 1) {
+    const y = 32 + index * 94;
+    ctx.strokeStyle = 'rgba(120,189,216,.12)';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(12, y);
+    ctx.lineTo(WORLD.width - 12, y);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawFixture(fixture, time) {
+  ctx.save();
+  if (fixture.type === 'rack') {
+    const gradient = ctx.createLinearGradient(fixture.x, fixture.y, fixture.x + fixture.w, fixture.y + fixture.h);
+    gradient.addColorStop(0, '#2d4a5b');
+    gradient.addColorStop(.4, '#1b3447');
+    gradient.addColorStop(1, '#0c1b29');
+    ctx.fillStyle = 'rgba(0,0,0,.28)';
+    roundedRect(ctx, fixture.x + 8, fixture.y + 10, fixture.w, fixture.h, 8);
+    ctx.fill();
+    ctx.fillStyle = gradient;
+    roundedRect(ctx, fixture.x, fixture.y, fixture.w, fixture.h, 8);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(143,208,231,.35)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.fillStyle = '#0b1926';
+    roundedRect(ctx, fixture.x + 9, fixture.y + 12, fixture.w - 18, fixture.h - 24, 5);
+    ctx.fill();
+    const count = Math.max(3, Math.floor(fixture.h / 24));
+    for (let index = 0; index < count; index += 1) {
+      const sy = fixture.y + 18 + index * ((fixture.h - 36) / count);
+      ctx.fillStyle = index % 3 === 0 ? '#274b61' : '#18364b';
+      roundedRect(ctx, fixture.x + 14, sy, fixture.w - 28, 12, 3);
+      ctx.fill();
+      ctx.fillStyle = index % 2 === 0 ? '#63e6ff' : '#82ffc1';
+      ctx.globalAlpha = .45 + .2 * Math.sin(time * .003 + index);
+      ctx.fillRect(fixture.x + fixture.w - 20, sy + 4, 4, 4);
+      ctx.globalAlpha = 1;
+    }
+    ctx.fillStyle = '#a9c7d9';
+    ctx.font = 'bold 10px ui-monospace, monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(fixture.label, fixture.x + fixture.w / 2, fixture.y + fixture.h + 17);
+    drawFixtureBolts(fixture.x, fixture.y, fixture.w, fixture.h);
+  } else if (fixture.type === 'cabinet') {
+    ctx.fillStyle = '#1e3b4e';
+    roundedRect(ctx, fixture.x, fixture.y, fixture.w, fixture.h, 7);
+    ctx.fill();
+    ctx.strokeStyle = '#52778c';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.fillStyle = '#0b1b2a';
+    roundedRect(ctx, fixture.x + 9, fixture.y + 9, fixture.w - 18, fixture.h - 18, 4);
+    ctx.fill();
+    ctx.fillStyle = '#63e6ff';
+    ctx.fillRect(fixture.x + 16, fixture.y + 17, fixture.w - 32, 3);
+    for (let index = 0; index < 3; index += 1) {
+      ctx.fillStyle = index === 1 ? '#82ffc1' : '#ffcb72';
+      ctx.beginPath();
+      ctx.arc(fixture.x + 20 + index * 14, fixture.y + fixture.h - 19, 3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.fillStyle = '#a9c7d9';
+    ctx.font = 'bold 9px ui-monospace, monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(fixture.label, fixture.x + fixture.w / 2, fixture.y + fixture.h + 14);
+  } else if (fixture.type === 'hatch') {
+    ctx.fillStyle = '#223e51';
+    roundedRect(ctx, fixture.x - 6, fixture.y - 18, fixture.w + 12, fixture.h + 36, 11);
+    ctx.fill();
+    ctx.strokeStyle = '#7ba6bc';
+    ctx.lineWidth = 4;
+    ctx.stroke();
+    ctx.strokeStyle = '#2e566d';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(fixture.x + 5, fixture.y - 9, fixture.w - 10, fixture.h + 18);
+    ctx.fillStyle = '#7ba6bc';
+    for (let index = 0; index < 4; index += 1) {
+      ctx.beginPath();
+      ctx.arc(fixture.x + 9 + index * 22, fixture.y + fixture.h / 2, 3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.fillStyle = '#c4d9e5';
+    ctx.font = 'bold 10px ui-monospace, monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(fixture.label, fixture.x + fixture.w / 2, fixture.y + fixture.h + 32);
+  } else if (fixture.type === 'pipe') {
+    ctx.fillStyle = '#28475a';
+    roundedRect(ctx, fixture.x, fixture.y, fixture.w, fixture.h, fixture.h / 2);
+    ctx.fill();
+    ctx.strokeStyle = '#5f8499';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    for (let index = 0; index < fixture.w; index += 38) {
+      ctx.fillStyle = '#7fa3b7';
+      ctx.fillRect(fixture.x + index, fixture.y - 3, 5, fixture.h + 6);
+    }
+  } else if (fixture.type === 'panel') {
+    ctx.fillStyle = '#1c3b50';
+    roundedRect(ctx, fixture.x, fixture.y, fixture.w, fixture.h, 6);
+    ctx.fill();
+    ctx.strokeStyle = '#527c91';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.fillStyle = '#0a1a28';
+    roundedRect(ctx, fixture.x + 8, fixture.y + 7, fixture.w - 16, fixture.h - 14, 3);
+    ctx.fill();
+    ctx.fillStyle = '#63e6ff';
+    ctx.fillRect(fixture.x + 15, fixture.y + 15, fixture.w * .35, 3);
+    ctx.fillStyle = '#82ffc1';
+    ctx.fillRect(fixture.x + fixture.w * .58, fixture.y + 15, fixture.w * .2, 3);
+    ctx.fillStyle = '#b2cfdf';
+    ctx.font = 'bold 8px ui-monospace, monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(fixture.label, fixture.x + fixture.w / 2, fixture.y + fixture.h - 8);
+  }
+  ctx.restore();
+}
+
+function drawFixtureBolts(x, y, w, h) {
+  const points = [[x + 7, y + 7], [x + w - 7, y + 7], [x + 7, y + h - 7], [x + w - 7, y + h - 7]];
+  points.forEach(point => {
+    ctx.fillStyle = '#8eafc0';
+    ctx.beginPath();
+    ctx.arc(point[0], point[1], 2.5, 0, Math.PI * 2);
+    ctx.fill();
+  });
+}
+
+function drawDockingArea() {
+  ctx.save();
+  const dock = TARGETS[0];
+  const glow = ctx.createRadialGradient(dock.x, dock.y, 8, dock.x, dock.y, 92);
+  glow.addColorStop(0, 'rgba(99,230,255,.16)');
+  glow.addColorStop(1, 'rgba(99,230,255,0)');
+  ctx.fillStyle = glow;
+  ctx.beginPath();
+  ctx.arc(dock.x, dock.y, 92, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(99,230,255,.4)';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.arc(dock.x, dock.y, 38, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.strokeStyle = 'rgba(99,230,255,.17)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.arc(dock.x, dock.y, 52, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.fillStyle = '#1e455b';
+  roundedRect(ctx, dock.x - 31, dock.y - 24, 62, 48, 9);
+  ctx.fill();
+  ctx.strokeStyle = '#6ccde8';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.fillStyle = '#a8eaff';
+  ctx.fillRect(dock.x - 18, dock.y - 11, 36, 4);
+  ctx.fillStyle = '#82ffc1';
+  ctx.beginPath();
+  ctx.arc(dock.x, dock.y + 5, 5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#c4e5f4';
+  ctx.font = 'bold 11px ui-monospace, monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('DOCKING STATION', dock.x, dock.y + 52);
+  ctx.restore();
+}
+
+function drawRouteLine() {
+  ctx.save();
+  ctx.setLineDash([9, 12]);
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = 'rgba(99,230,255,.2)';
+  ctx.beginPath();
+  TARGETS.forEach((target, index) => {
+    if (index === 0) ctx.moveTo(target.x, target.y);
+    else ctx.lineTo(target.x, target.y);
+  });
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.restore();
+}
+
+function drawTargets(time) {
+  TARGETS.forEach((target, index) => {
+    const completed = index < state.targetIndex || state.completed;
+    const active = index === state.targetIndex && !state.completed;
+    if (completed) {
+      drawCompletedTarget(target);
+      return;
+    }
+    const phase = time * .002 + index;
+    const pulse = 1 + (Math.sin(phase) + 1) * .11;
+    const radius = active ? 26 * pulse : 15;
+    ctx.save();
+    ctx.globalAlpha = active ? 1 : .35;
+    const color = active ? '#ffcb72' : '#7393a8';
+    const glow = ctx.createRadialGradient(target.x, target.y, 2, target.x, target.y, radius * 2.8);
+    glow.addColorStop(0, active ? 'rgba(255,203,114,.22)' : 'rgba(115,147,168,.08)');
+    glow.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.arc(target.x, target.y, radius * 2.8, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = active ? 3 : 2;
+    ctx.beginPath();
+    ctx.arc(target.x, target.y, radius, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(target.x - radius * 1.55, target.y);
+    ctx.lineTo(target.x - radius * .65, target.y);
+    ctx.moveTo(target.x + radius * .65, target.y);
+    ctx.lineTo(target.x + radius * 1.55, target.y);
+    ctx.moveTo(target.x, target.y - radius * 1.55);
+    ctx.lineTo(target.x, target.y - radius * .65);
+    ctx.moveTo(target.x, target.y + radius * .65);
+    ctx.lineTo(target.x, target.y + radius * 1.55);
+    ctx.stroke();
+    ctx.fillStyle = color;
+    ctx.font = 'bold 12px ui-monospace, monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(target.icon, target.x, target.y + 4);
+    ctx.fillStyle = active ? '#ffe2ad' : '#a4bac9';
+    ctx.font = active ? 'bold 13px ui-monospace, monospace' : '10px ui-monospace, monospace';
+    ctx.fillText(target.short.toUpperCase(), target.x, target.y - radius - 12);
+    if (active) {
+      const distanceToTarget = distance(state.player, target);
+      ctx.fillStyle = 'rgba(255,203,114,.9)';
+      ctx.font = '10px ui-monospace, monospace';
+      ctx.fillText(`${distanceToTarget.toFixed(0)} u`, target.x, target.y + radius + 17);
+    }
+    ctx.restore();
+  });
+}
+
+function drawCompletedTarget(target) {
+  ctx.save();
+  ctx.globalAlpha = .85;
+  ctx.fillStyle = 'rgba(130,255,193,.12)';
+  ctx.beginPath();
+  ctx.arc(target.x, target.y, 19, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#82ffc1';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(target.x, target.y, 15, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.fillStyle = '#82ffc1';
+  ctx.font = 'bold 15px ui-monospace, monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('✓', target.x, target.y + 5);
+  ctx.restore();
+}
+
+function drawPlayer(time) {
+  const player = state.player;
+  ctx.save();
+  if (state.shake > 0) {
+    ctx.translate((Math.random() - .5) * state.shake, (Math.random() - .5) * state.shake);
+  }
+  player.trail.forEach((point, index) => {
+    const alpha = (index + 1) / player.trail.length * .15;
+    ctx.fillStyle = `rgba(99,230,255,${alpha})`;
+    ctx.beginPath();
+    ctx.arc(point.x, point.y, 3 + index * .2, 0, Math.PI * 2);
+    ctx.fill();
+  });
+  const pulse = 1 + Math.sin(time * .005) * .04;
+  const glow = ctx.createRadialGradient(player.x, player.y, 2, player.x, player.y, 48);
+  glow.addColorStop(0, 'rgba(99,230,255,.22)');
+  glow.addColorStop(1, 'rgba(99,230,255,0)');
+  ctx.fillStyle = glow;
+  ctx.beginPath();
+  ctx.arc(player.x, player.y, 48, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.translate(player.x, player.y);
+  ctx.rotate(player.angle);
+  ctx.scale(pulse, pulse);
+  ctx.fillStyle = 'rgba(0,0,0,.3)';
+  ctx.beginPath();
+  ctx.ellipse(4, 6, 22, 18, 0, 0, Math.PI * 2);
+  ctx.fill();
+  const body = ctx.createRadialGradient(-5, -7, 1, 0, 0, 23);
+  body.addColorStop(0, '#d6fbff');
+  body.addColorStop(.35, '#72d7ed');
+  body.addColorStop(.72, '#2d7799');
+  body.addColorStop(1, '#12334b');
+  ctx.fillStyle = body;
+  ctx.beginPath();
+  ctx.arc(0, 0, 17, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#b7f5ff';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+  ctx.fillStyle = '#102638';
+  ctx.beginPath();
+  ctx.ellipse(4, -1, 8, 10, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#63e6ff';
+  ctx.beginPath();
+  ctx.ellipse(6, -2, 4.4, 6.2, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath();
+  ctx.arc(7, -4, 1.4, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#e5fcff';
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.moveTo(15, 0);
+  ctx.lineTo(25, 0);
+  ctx.stroke();
+  ctx.fillStyle = '#82ffc1';
+  ctx.beginPath();
+  ctx.arc(25, 0, 3, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(99,230,255,.45)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.arc(0, 0, 22, time * .001, time * .001 + Math.PI * 1.35);
+  ctx.stroke();
+  ctx.restore();
+  if (state.scanAnimation > 0) drawScanEffect(player.x, player.y, time);
+}
+
+function drawScanEffect(x, y, time) {
+  const progress = 1 - state.scanAnimation / 1.1;
+  const radius = 18 + progress * 110;
+  ctx.save();
+  ctx.globalAlpha = Math.max(0, 1 - progress);
+  ctx.strokeStyle = '#63e6ff';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.arc(x, y, radius, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.strokeStyle = 'rgba(99,230,255,.65)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.arc(x, y, radius * .72, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawParticlesInRoom(time) {
+  state.particles.forEach(particle => {
+    const x = (particle.x + Math.sin(time * .0003 + particle.phase) * 8 + WORLD.width) % WORLD.width;
+    const y = (particle.y + Math.cos(time * .00025 + particle.phase) * 6 + WORLD.height) % WORLD.height;
+    ctx.fillStyle = 'rgba(144,214,239,.12)';
+    ctx.beginPath();
+    ctx.arc(x, y, particle.radius, 0, Math.PI * 2);
+    ctx.fill();
+  });
+}
+
+function drawRoomBorder() {
+  const scale = worldScale();
+  const offset = worldOffset();
+  ctx.save();
+  ctx.translate(offset.x, offset.y);
+  ctx.scale(scale, scale);
+  ctx.strokeStyle = '#537e95';
+  ctx.lineWidth = 7;
+  roundedRect(ctx, 0, 0, WORLD.width, WORLD.height, 42);
+  ctx.stroke();
+  ctx.strokeStyle = 'rgba(99,230,255,.3)';
+  ctx.lineWidth = 2;
+  roundedRect(ctx, 9, 9, WORLD.width - 18, WORLD.height - 18, 34);
+  ctx.stroke();
+  const corners = [[24,24,1,1],[WORLD.width-24,24,-1,1],[24,WORLD.height-24,1,-1],[WORLD.width-24,WORLD.height-24,-1,-1]];
+  corners.forEach(corner => {
+    ctx.strokeStyle = '#8ddff4';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(corner[0], corner[1] + 22 * corner[3]);
+    ctx.lineTo(corner[0], corner[1]);
+    ctx.lineTo(corner[0] + 22 * corner[2], corner[1]);
+    ctx.stroke();
+  });
+  ctx.restore();
+}
+
+function renderRouteMap() {
+  const width = routeCanvas.width;
+  const height = routeCanvas.height;
+  routeCtx.clearRect(0, 0, width, height);
+  routeCtx.fillStyle = '#071421';
+  routeCtx.fillRect(0, 0, width, height);
+  const margin = 22;
+  const scaleX = (width - margin * 2) / WORLD.width;
+  const scaleY = (height - margin * 2) / WORLD.height;
+  const sx = x => margin + x * scaleX;
+  const sy = y => margin + y * scaleY;
+  routeCtx.strokeStyle = 'rgba(99,230,255,.08)';
+  routeCtx.lineWidth = 1;
+  for (let index = 0; index <= 12; index += 1) {
+    const x = margin + index * (width - margin * 2) / 12;
+    routeCtx.beginPath();
+    routeCtx.moveTo(x, margin);
+    routeCtx.lineTo(x, height - margin);
+    routeCtx.stroke();
+  }
+  for (let index = 0; index <= 6; index += 1) {
+    const y = margin + index * (height - margin * 2) / 6;
+    routeCtx.beginPath();
+    routeCtx.moveTo(margin, y);
+    routeCtx.lineTo(width - margin, y);
+    routeCtx.stroke();
+  }
+  routeCtx.strokeStyle = '#34556a';
+  routeCtx.lineWidth = 2;
+  roundedRect(routeCtx, margin, margin, width - margin * 2, height - margin * 2, 12);
+  routeCtx.stroke();
+  ROOM_FIXTURES.forEach(fixture => {
+    routeCtx.fillStyle = fixture.type === 'rack' ? '#1b394e' : '#294c60';
+    routeCtx.fillRect(sx(fixture.x), sy(fixture.y), Math.max(3, fixture.w * scaleX), Math.max(3, fixture.h * scaleY));
+  });
+  routeCtx.strokeStyle = 'rgba(99,230,255,.5)';
+  routeCtx.lineWidth = 1.5;
+  routeCtx.setLineDash([4, 4]);
+  routeCtx.beginPath();
+  TARGETS.forEach((target, index) => {
+    if (index === 0) routeCtx.moveTo(sx(target.x), sy(target.y));
+    else routeCtx.lineTo(sx(target.x), sy(target.y));
+  });
+  routeCtx.stroke();
+  routeCtx.setLineDash([]);
+  TARGETS.forEach((target, index) => {
+    const completed = index < state.targetIndex || state.completed;
+    const active = index === state.targetIndex && !state.completed;
+    routeCtx.fillStyle = completed ? '#82ffc1' : active ? '#ffcb72' : '#547287';
+    routeCtx.beginPath();
+    routeCtx.arc(sx(target.x), sy(target.y), active ? 5 : 3.5, 0, Math.PI * 2);
+    routeCtx.fill();
+  });
+  const player = state.player;
+  routeCtx.save();
+  routeCtx.translate(sx(player.x), sy(player.y));
+  routeCtx.rotate(player.angle);
+  routeCtx.fillStyle = '#63e6ff';
+  routeCtx.beginPath();
+  routeCtx.moveTo(7, 0);
+  routeCtx.lineTo(-5, -4.5);
+  routeCtx.lineTo(-3, 0);
+  routeCtx.lineTo(-5, 4.5);
+  routeCtx.closePath();
+  routeCtx.fill();
+  routeCtx.restore();
+}
+
+function render(time = performance.now()) {
+  if (!ctx) return;
+  ctx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+  drawBackground(time);
+  drawRoom(time);
+  renderRouteMap();
+}
+
+function canMoveTo(x, y) {
+  const radius = state.player.radius;
+  if (x < WORLD.margin + radius || x > WORLD.width - WORLD.margin - radius) return false;
+  if (y < WORLD.margin + radius || y > WORLD.height - WORLD.margin - radius) return false;
+  for (const fixture of ROOM_FIXTURES) {
+    const padding = radius + 5;
+    const insideX = x + padding > fixture.x && x - padding < fixture.x + fixture.w;
+    const insideY = y + padding > fixture.y && y - padding < fixture.y + fixture.h;
+    if (insideX && insideY && fixture.type !== 'pipe' && fixture.type !== 'panel') return false;
+  }
+  return true;
+}
+
+function stabilize() {
+  state.player.vx *= .12;
+  state.player.vy *= .12;
+  state.player.vx = Math.abs(state.player.vx) < 3 ? 0 : state.player.vx;
+  state.player.vy = Math.abs(state.player.vy) < 3 ? 0 : state.player.vy;
+  addLog('Attitude hold engaged; translation damped.', 'success');
+  showToast('Stabilization engaged.', 'success', 1800);
+}
+
+function updatePlayer(delta) {
+  const player = state.player;
+  const keys = state.keys;
+  const touch = state.touch;
+  const left = keys.has('arrowleft') || keys.has('q');
+  const right = keys.has('arrowright') || keys.has('rshift');
+  if (left || touch.left) player.angle -= CONFIG.rotationSpeed * delta;
+  if (right || touch.right) player.angle += CONFIG.rotationSpeed * delta;
+  player.angle = normalizeAngle(player.angle);
+  let dx = 0;
+  let dy = 0;
+  if (keys.has('w') || keys.has('arrowup') || touch.up) dy -= 1;
+  if (keys.has('s') || keys.has('arrowdown') || touch.down) dy += 1;
+  if (keys.has('a')) dx -= 1;
+  if (keys.has('d')) dx += 1;
+  if (dx !== 0 && dy !== 0) {
+    dx *= Math.SQRT1_2;
+    dy *= Math.SQRT1_2;
+  }
+  const acceleration = CONFIG.acceleration * delta;
+  player.vx += dx * acceleration;
+  player.vy += dy * acceleration;
+  player.vx *= Math.pow(CONFIG.friction, delta * 60);
+  player.vy *= Math.pow(CONFIG.friction, delta * 60);
+  const speed = Math.hypot(player.vx, player.vy);
+  if (speed > CONFIG.maxSpeed) {
+    player.vx = player.vx / speed * CONFIG.maxSpeed;
+    player.vy = player.vy / speed * CONFIG.maxSpeed;
+  }
+  const nextX = player.x + player.vx * delta;
+  const nextY = player.y + player.vy * delta;
+  if (canMoveTo(nextX, player.y)) player.x = nextX;
+  else player.vx *= -.12;
+  if (canMoveTo(player.x, nextY)) player.y = nextY;
+  else player.vy *= -.12;
+  player.x = clamp(player.x, WORLD.margin + player.radius, WORLD.width - WORLD.margin - player.radius);
+  player.y = clamp(player.y, WORLD.margin + player.radius, WORLD.height - WORLD.margin - player.radius);
+  if (Math.hypot(player.x - player.lastX, player.y - player.lastY) > 4) {
+    player.trail.push({ x: player.lastX, y: player.lastY });
+    if (player.trail.length > 12) player.trail.shift();
+    player.lastX = player.x;
+    player.lastY = player.y;
+  }
+  if (state.started && !state.completed && speed > 4) state.battery = Math.max(0, state.battery - CONFIG.batteryDrain * delta * speed / 40);
+  state.shake = Math.max(0, state.shake - delta * 8);
+  state.scanAnimation = Math.max(0, state.scanAnimation - delta);
+  state.scanPulse += delta;
+}
+
+function pointNearFixture(point, fixture, padding = 0) {
+  const nearestX = clamp(point.x, fixture.x - padding, fixture.x + fixture.w + padding);
+  const nearestY = clamp(point.y, fixture.y - padding, fixture.y + fixture.h + padding);
+  return Math.hypot(point.x - nearestX, point.y - nearestY) < point.radius;
+}
+
+function getNearbyInteractable() {
+  const target = currentTarget();
+  if (!target) return null;
+  return distance(state.player, target) <= CONFIG.interactionRadius ? target : null;
+}
+
+function interact() {
+  if (!state.started || state.completed || state.paused) return;
+  const target = getNearbyInteractable();
+  if (!target) {
+    const next = currentTarget();
+    if (next) {
+      const remaining = Math.max(0, distance(state.player, next) - CONFIG.interactionRadius);
+      showToast(`Not in interaction range. Move about ${Math.ceil(remaining)} units closer to ${next.short}.`, 'warning');
+      addLog(`Interaction unavailable: ${next.short} is out of range.`, 'warning');
+    }
+    return;
+  }
+  if (target.type === 'dock' && state.targetIndex === 0) {
+    state.player.x = target.x + 45;
+    state.player.y = target.y;
+    state.player.angle = target.heading;
+    state.player.vx = 0;
+    state.player.vy = 0;
+    showToast('Dock release confirmed. Registering docking checkpoint.', 'success');
+    addLog('Docking station release confirmed.', 'success');
+    scanTarget();
+    return;
+  }
+  scanTarget();
+}
+
+function scanTarget() {
+  if (!state.started || state.completed || state.paused || state.scanLock) return;
+  const target = currentTarget();
+  if (!target) return;
+  const range = distance(state.player, target);
+  if (range > CONFIG.scanRadius) {
+    const remaining = Math.ceil(range - CONFIG.scanRadius);
+    showToast(`Marker out of range. Move ${remaining} units closer.`, 'warning');
+    addLog(`Scan rejected: ${target.short} out of range (${range.toFixed(0)} units).`, 'warning');
+    state.flash = .15;
+    return;
+  }
+  const alignment = currentAlignment(target);
+  if (alignment > 100) {
+    showToast(`Heading is reversed. Rotate toward ${target.short}; alignment error is ${alignment.toFixed(0)}°.`, 'warning');
+    addLog(`Scan rejected: heading error ${alignment.toFixed(0)}°.`, 'warning');
+    return;
+  }
+  state.scanLock = true;
+  state.scanAnimation = 1.1;
+  state.scanFeedback = target.id;
+  state.scans += 1;
+  const rangeScore = Math.round(clamp(100 - range * .48, 45, 100));
+  const alignmentScore = Math.round(clamp(100 - alignment * 1.45, 25, 100));
+  const speed = Math.hypot(state.player.vx, state.player.vy);
+  const stabilityScore = Math.round(clamp(100 - speed * .32, 25, 100));
+  const earned = Math.round(rangeScore * .35 + alignmentScore * .45 + stabilityScore * .2);
+  state.score += earned;
+  state.bestAlignment = Math.min(state.bestAlignment, alignment);
+  state.battery = Math.max(0, state.battery - CONFIG.scanDrain);
+  state.scanResults.push({ id: target.id, range, alignment, speed, score: earned });
+  addLog(`${target.short} marker registered · ${earned}/100 scan quality.`, 'success');
+  showToast(`${target.short} registered. Scan quality ${earned}/100.`, 'success', 2400);
+  state.targetIndex += 1;
+  renderObjectives();
+  updateTelemetry();
+  window.setTimeout(() => {
+    state.scanLock = false;
+    if (state.targetIndex >= TARGETS.length) completeMission();
+  }, 520);
+}
+
+function completeMission() {
+  if (state.completed) return;
+  state.completed = true;
+  state.player.vx = 0;
+  state.player.vy = 0;
+  state.score += Math.max(0, Math.round((state.timeLimit - state.elapsed) * .25));
+  renderObjectives();
+  updateTelemetry();
+  addLog('Goal checkpoint reached. Route submitted successfully.', 'success');
+  showToast('Mission complete. Route submitted.', 'success', 5000);
+  window.setTimeout(showResults, 700);
+}
+
+function showResults() {
+  const fragment = document.createDocumentFragment();
+  const score = document.createElement('div');
+  score.className = 'result-score';
+  score.textContent = state.score.toLocaleString();
+  const caption = document.createElement('div');
+  caption.className = 'result-caption';
+  caption.textContent = 'Training mission score';
+  fragment.append(score, caption);
+  const grid = document.createElement('div');
+  grid.className = 'result-grid';
+  const metrics = [
+    ['Checkpoints', `${TARGETS.length}/${TARGETS.length}`],
+    ['Mission time', formatTime(state.elapsed)],
+    ['Markers scanned', String(state.scans)],
+    ['Battery remaining', `${Math.ceil(state.battery)}%`],
+    ['Best alignment', `${state.bestAlignment.toFixed(1)}°`],
+    ['Scan quality avg.', `${Math.round(state.scanResults.reduce((sum, item) => sum + item.score, 0) / Math.max(1, state.scanResults.length))}/100`]
+  ];
+  metrics.forEach(metric => {
+    const item = document.createElement('div');
+    item.className = 'result-item';
+    const label = document.createElement('span');
+    label.textContent = metric[0];
+    const value = document.createElement('strong');
+    value.textContent = metric[1];
+    item.append(label, value);
+    grid.append(item);
+  });
+  fragment.append(grid);
+  addTextBlock(fragment, 'Debrief', 'Mission complete. Compare your scan quality and heading alignment, then restart to practice a cleaner route. This score is illustrative and is not an official Kibo-RPC score.');
+  showModal('Mission complete', fragment);
+}
+
+function resetMission(showMessage = true) {
+  state.started = false;
+  state.launching = false;
+  state.completed = false;
+  state.paused = false;
+  state.elapsed = 0;
+  state.battery = 100;
+  state.score = 0;
+  state.scans = 0;
+  state.targetIndex = 0;
+  state.flash = 0;
+  state.shake = 0;
+  state.scanAnimation = 0;
+  state.scanPulse = 0;
+  state.scanLock = false;
+  state.scanFeedback = '';
+  state.logs = [];
+  state.scanResults = [];
+  state.bestAlignment = 180;
+  state.keys.clear();
+  state.touch = { up: false, down: false, left: false, right: false };
+  state.player = { x: 125, y: 360, vx: 0, vy: 0, angle: 0, radius: 15, trail: [], lastX: 125, lastY: 360 };
+  UI.overlay.style.display = 'flex';
+  UI.launchCard.innerHTML = `<div class="launch-symbol"><svg viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="23" stroke="currentColor" stroke-width="1.5"/><circle cx="32" cy="32" r="13" stroke="currentColor" stroke-width="1.5" stroke-dasharray="4 4"/><circle cx="32" cy="32" r="5" fill="#82ffc1"/><path d="M32 3v10M32 51v10M3 32h10M51 32h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div><div class="eyebrow">Mission operations · training console</div><h2 class="launch-title">READY FOR<br><span>DEPLOYMENT</span></h2><p class="launch-description">Pilot an Int-Ball2-inspired inspection drone through a finite Kibo module. Visit every AR checkpoint, align your heading, and complete the inspection route before returning to the goal point.</p><div class="launch-note"><strong>TRAINING SIMULATOR NOTICE</strong><br>This is an independent educational practice project, not an official JAXA or NASA simulator. Locations and scoring are illustrative until official mission materials specify otherwise.</div><button class="primary-button launch-button" id="launchButton">▶ &nbsp; Begin launch sequence</button><div class="launch-foot">KEYBOARD + TOUCH CONTROLS · TRAINING BUILD</div>`;
+  document.getElementById('launchButton').addEventListener('click', beginLaunch);
+  UI.targetBanner.classList.remove('visible');
+  renderObjectives();
+  addLog('Mission console initialized. Awaiting launch authorization.');
+  updateTelemetry();
+  if (showMessage) showToast('Mission reset. Launch when ready.', 'success');
+  render();
+}
+
+function beginLaunch() {
+  if (state.launching || state.started) return;
+  state.launching = true;
+  state.launchStart = performance.now();
+  UI.launchCard.innerHTML = `<div class="eyebrow">Flight systems check</div><h2 class="launch-title">LAUNCH<br><span>SEQUENCE</span></h2><div class="launch-count" id="launchCount">3</div><p class="launch-description" id="launchDescription">Checking attitude control, scanner, and telemetry link…</p><div class="launch-progress"><div class="launch-progress-fill" id="launchProgressFill"></div></div>`;
+  addLog('Launch sequence started. Running pre-flight checks.');
+  soundBeep(440, .08);
+  const startedAt = performance.now();
+  function step(now) {
+    if (!state.launching) return;
+    const elapsed = now - startedAt;
+    const progress = clamp(elapsed / 3100, 0, 1);
+    const count = Math.max(0, 3 - Math.floor(elapsed / 1000));
+    const countElement = document.getElementById('launchCount');
+    const description = document.getElementById('launchDescription');
+    const progressFill = document.getElementById('launchProgressFill');
+    if (countElement) countElement.textContent = count === 0 ? 'GO' : String(count);
+    if (description) {
+      if (elapsed < 900) description.textContent = 'Checking attitude control, scanner, and telemetry link…';
+      else if (elapsed < 1900) description.textContent = 'Verifying docking release and checkpoint database…';
+      else description.textContent = 'All systems nominal. Deploying into Kibo module.';
+    }
+    if (progressFill) progressFill.style.width = `${progress * 100}%`;
+    if (elapsed < 3100) {
+      if (Math.floor(elapsed / 1000) !== Math.floor((elapsed - 16) / 1000)) soundBeep(500 + count * 60, .06);
+      requestAnimationFrame(step);
+    } else {
+      state.launching = false;
+      state.started = true;
+      state.elapsed = 0;
+      state.missionStartWallTime = performance.now();
+      UI.overlay.style.display = 'none';
+      canvas.focus({ preventScroll: true });
+      addLog('Launch successful. Int-Ball2 training unit deployed.', 'success');
+      addLog('Objective 1: confirm docking station release.', 'normal');
+      showToast('Launch successful. Welcome aboard Kibo.', 'success');
+      soundBeep(740, .18);
+      updateTelemetry();
+    }
+  }
+  requestAnimationFrame(step);
+}
+
+function soundBeep(frequency = 520, duration = .08) {
+  if (muted) return;
+  try {
+    audioContext = audioContext || new (window.AudioContext || window.webkitAudioContext)();
+    const oscillator = audioContext.createOscillator();
+    const gain = audioContext.createGain();
+    oscillator.type = 'sine';
+    oscillator.frequency.value = frequency;
+    gain.gain.setValueAtTime(.045, audioContext.currentTime);
+    gain.gain.exponentialRampToValueAtTime(.001, audioContext.currentTime + duration);
+    oscillator.connect(gain);
+    gain.connect(audioContext.destination);
+    oscillator.start();
+    oscillator.stop(audioContext.currentTime + duration);
+  } catch (error) {
+    muted = true;
+  }
+}
+
+function tick(delta) {
+  if (!state.started || state.completed || state.paused) return;
+  state.elapsed += delta;
+  updatePlayer(delta);
+  if (state.elapsed >= state.timeLimit) {
+    state.paused = true;
+    addLog('Training time limit reached. Mission paused for debrief.', 'alert');
+    showModal('Training time expired', 'The practice timer reached its limit. Restart the mission to try a faster route.');
+  }
+  if (state.battery <= 0) {
+    state.battery = 0;
+    state.paused = true;
+    addLog('Battery depleted. Mission paused.', 'alert');
+    showModal('Battery depleted', 'The drone battery has run out in this practice run. Restart the mission to try again. Use shorter movements and avoid unnecessary scanning attempts.');
+  }
+  if (state.elapsed - state.lastUiUpdate > .12) {
+    state.lastUiUpdate = state.elapsed;
+    updateTelemetry();
+  }
+}
+
+function frame(time) {
+  if (!state.lastFrame) state.lastFrame = time;
+  const delta = Math.min(.04, Math.max(0, (time - state.lastFrame) / 1000));
+  state.lastFrame = time;
+  tick(delta);
+  render(time);
+  requestAnimationFrame(frame);
+}
+
+function handleKeyDown(event) {
+  const key = event.key.toLowerCase();
+  if (['arrowup','arrowdown','arrowleft','arrowright',' '].includes(key)) event.preventDefault();
+  if (UI.modalBackdrop.classList.contains('visible')) {
+    if (key === 'escape' || key === 'enter') closeModal();
+    return;
+  }
+  if (key === 'h' && !event.repeat) {
+    showHelp();
+    return;
+  }
+  if (key === 'f' && !event.repeat) {
+    scanTarget();
+    return;
+  }
+  if (key === 'e' && !event.repeat) {
+    interact();
+    return;
+  }
+  if (key === ' ' && !event.repeat) {
+    scanTarget();
+    return;
+  }
+  if (key === 'r' && !event.repeat) {
+    stabilize();
+    return;
+  }
+  if (key === 'escape') {
+    if (state.started) {
+      state.paused = !state.paused;
+      showToast(state.paused ? 'Mission paused. Press Escape to resume.' : 'Mission resumed.', 'normal');
+    }
+    return;
+  }
+  state.keys.add(key);
+}
+
+function handleKeyUp(event) {
+  state.keys.delete(event.key.toLowerCase());
+}
+
+function bindHoldButton(button, direction) {
+  const set = active => {
+    state.touch[direction] = active;
+    if (active) canvas.focus({ preventScroll: true });
+  };
+  button.addEventListener('pointerdown', event => {
+    event.preventDefault();
+    button.setPointerCapture(event.pointerId);
+    set(true);
+  });
+  button.addEventListener('pointerup', () => set(false));
+  button.addEventListener('pointercancel', () => set(false));
+  button.addEventListener('lostpointercapture', () => set(false));
+  button.addEventListener('contextmenu', event => event.preventDefault());
+}
+
+function bindEvents() {
+  document.addEventListener('keydown', handleKeyDown);
+  document.addEventListener('keyup', handleKeyUp);
+  window.addEventListener('blur', () => {
+    state.keys.clear();
+    state.touch = { up: false, down: false, left: false, right: false };
+  });
+  window.addEventListener('resize', resizeCanvas);
+  UI.launchButton.addEventListener('click', beginLaunch);
+  UI.targetButton.addEventListener('click', scanTarget);
+  document.getElementById('helpButton').addEventListener('click', showHelp);
+  document.getElementById('routeButton').addEventListener('click', showRouteBriefing);
+  document.getElementById('resetButton').addEventListener('click', () => {
+    closeModal();
+    resetMission(true);
+  });
+  UI.modalClose.addEventListener('click', closeModal);
+  document.getElementById('modalOkay').addEventListener('click', closeModal);
+  UI.modalBackdrop.addEventListener('click', event => {
+    if (event.target === UI.modalBackdrop) closeModal();
+  });
+  document.querySelectorAll('[data-hold]').forEach(button => bindHoldButton(button, button.dataset.hold));
+  document.getElementById('mobileRotateLeft').addEventListener('click', () => {
+    state.player.angle = normalizeAngle(state.player.angle - Math.PI / 8);
+    updateTelemetry();
+  });
+  document.getElementById('mobileRotateRight').addEventListener('click', () => {
+    state.player.angle = normalizeAngle(state.player.angle + Math.PI / 8);
+    updateTelemetry();
+  });
+  document.getElementById('mobileInteract').addEventListener('click', interact);
+  document.getElementById('mobileScan').addEventListener('click', scanTarget);
+  canvas.addEventListener('pointerdown', () => canvas.focus({ preventScroll: true }));
+  canvas.addEventListener('contextmenu', event => event.preventDefault());
+}
+
+function init() {
+  initStars();
+  initParticles();
+  bindEvents();
+  resizeCanvas();
+  renderObjectives();
+  addLog('Mission console initialized. Awaiting launch authorization.');
+  updateTelemetry();
+  requestAnimationFrame(frame);
+}
+
+init();
 </script>
 </body>
 </html>"""
 
-@app.after_request
-def add_security_headers(response):
-    response.headers["X-Content-Type-Options"] = "nosniff"
-    response.headers["X-Frame-Options"] = "SAMEORIGIN"
-    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-    response.headers["Cache-Control"] = "no-store"
-    return response
 
 @app.get("/")
 def index():
-    if "mission_id" not in session:
-        session["mission_id"] = secrets.token_hex(8)
-    return render_template_string(PAGE)
+    return Response(PAGE, mimetype="text/html; charset=utf-8")
+
 
 @app.get("/health")
 def health():
-    return jsonify(status="ok", app="KIBO Junior Astronaut Mission Trainer", version="1.1.0")
+    return jsonify({
+        "status": "ok",
+        "application": "KIBO Mission Trainer",
+        "mode": "independent educational practice simulator",
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    })
 
-@app.errorhandler(404)
-def not_found(_error):
-    return jsonify(error="Not found"), 404
 
-@app.errorhandler(500)
-def server_error(_error):
-    return jsonify(error="Internal server error"), 500
+@app.get("/favicon.ico")
+def favicon():
+    return Response(status=204)
+
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", "5000"))
-    app.run(host="0.0.0.0", port=port, debug=False)
+    app.run(host="0.0.0.0", port= int(__import__("os").environ.get("PORT", "5000")), debug=False)
