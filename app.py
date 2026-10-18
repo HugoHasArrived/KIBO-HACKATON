@@ -470,7 +470,7 @@ body.autonomous-mode .control-strip, body.autonomous-mode .mobile-controls, body
     </div>
     <div class="brand-copy">
       <h1 class="brand-title">KIBO <span style="color:var(--cyan)">MISSION TRAINER</span></h1>
-      <div class="brand-subtitle">Junior Astronaut Mission Simulator · Practice Build</div>
+      <div class="brand-subtitle">7th Kibo-RPC · Int-Ball2 Autonomy Practice</div>
     </div>
   </div>
   <div class="top-status">
@@ -486,32 +486,55 @@ body.autonomous-mode .control-strip, body.autonomous-mode .mobile-controls, body
         <div class="how-to-play" aria-label="How to run an autonomous mission">
           <h3>How to run your first autonomous mission</h3>
           <ol>
-            <li><strong>Read the mission script.</strong> Each line is one command. The sample route is already filled in for you.</li>
-            <li><strong>Begin the launch sequence.</strong> Use the launch button over the Kibo scene below and wait for the countdown to finish.</li>
-            <li><strong>Click “Run autonomous mission”.</strong> The robot follows the script on its own. Do not use WASD to steer it.</li>
-            <li><strong>Watch the mission.</strong> The active command, checkpoint list, timer, battery, and mission log show what is happening.</li>
-            <li><strong>Improve and retry.</strong> If a command fails, click Stop, edit the script, and run it again. “Restore sample” brings back the working example.</li>
+            <li><strong>Read the mission plan.</strong> The sample program is a browser-based practice script, not the C++/Python ROS package used for official Kibo-RPC submission.</li>
+            <li><strong>Start the training run.</strong> Click “Begin launch sequence” on the Kibo scene and wait for the countdown.</li>
+            <li><strong>Run autonomously.</strong> Click “Run autonomous mission”. The simulated Int-Ball2 follows the commands; do not steer it with WASD.</li>
+            <li><strong>Inspect each result.</strong> Watch the current position, camera alignment, marker scan, checkpoint status, elapsed time, and event log.</li>
+            <li><strong>Debug safely.</strong> Stop the run, edit the program, and retry. The sample route can be restored at any time.</li>
           </ol>
-          <p><strong>Command guide:</strong> <code>MOVE_TO checkpoint-id</code> moves to a named checkpoint; <code>ALIGN</code> adjusts the camera heading; <code>SCAN</code> records the AR marker; <code>WAIT 1</code> pauses for one second.</p>
+          <p><strong>Training commands:</strong> <code>MOVE_TO id</code> navigates to a practice checkpoint; <code>ALIGN</code> points the camera; <code>SCAN</code> attempts marker registration; <code>WAIT 1</code> waits for one second. In the official API workflow, a successful move alone does not prove a checkpoint passed: the robot must be stable and the checkpoint evaluation must succeed.</p>
+          <p><strong>Official concepts modeled:</strong> retrieve checkpoint definitions, move to the target pose, align the camera to the AR marker, stabilize, evaluate the checkpoint, log the result, and finish the mission. The real Kibo-RPC interfaces use ROS topics, services, and actions.</p>
         </div>
         <label class="program-label" for="programEditor">MISSION SCRIPT</label>
         <textarea id="programEditor" spellcheck="false" aria-label="Autonomous mission script">MOVE_TO dock
 ALIGN
+WAIT 1
 SCAN
 MOVE_TO joint-a
 ALIGN
+WAIT 1
 SCAN
 MOVE_TO hatch
 ALIGN
+WAIT 1
 SCAN
 MOVE_TO rack
 ALIGN
+WAIT 1
 SCAN
 MOVE_TO joint-b
 ALIGN
+WAIT 1
+SCAN
+MOVE_TO panel
+ALIGN
+WAIT 1
+SCAN
+MOVE_TO sensor-bay
+ALIGN
+WAIT 1
+SCAN
+MOVE_TO rack-b
+ALIGN
+WAIT 1
+SCAN
+MOVE_TO hatch-b
+ALIGN
+WAIT 1
 SCAN
 MOVE_TO goal
 ALIGN
+WAIT 1
 SCAN</textarea>
         <div class="program-toolbar">
           <button class="primary-button" id="runProgramButton">▶ Run autonomous mission</button>
@@ -519,7 +542,7 @@ SCAN</textarea>
           <button class="secondary-button" id="sampleProgramButton">Restore sample</button>
         </div>
         <div class="program-status" id="programStatus" role="status">Edit the script if you like. Commands are executed in order after launch.</div>
-        <div class="command-reference"><strong>Commands:</strong> <code>MOVE_TO dock|joint-a|hatch|rack|joint-b|goal</code>, <code>ALIGN</code>, <code>SCAN</code>, <code>WAIT 1</code>. Lines starting with # are ignored.</div>
+        <div class="command-reference"><strong>Practice commands:</strong> <code>MOVE_TO dock|joint-a|hatch|rack|joint-b|goal</code>, <code>ALIGN</code>, <code>SCAN</code>, <code>WAIT 1</code>. Lines starting with # are ignored. These commands are interpreted by this web trainer only; they are not the official ROS API.</div>
       </div>
     </section>
     <div class="stage-frame">
@@ -547,8 +570,8 @@ SCAN</textarea>
           </div>
           <div class="eyebrow">Mission operations · training console</div>
           <h2 class="launch-title">READY FOR<br><span>DEPLOYMENT</span></h2>
-          <p class="launch-description">This is a programming challenge, not a driving game. First click Begin launch sequence. After the countdown, use the Autonomous program editor at the top of the page and click Run autonomous mission. The robot will follow the command list by itself.</p>
-          <div class="launch-note"><strong>TRAINING SIMULATOR NOTICE</strong><br>This is an independent educational practice project, not an official JAXA or NASA simulator. Locations and scoring are illustrative until official mission materials specify otherwise.</div>
+          <p class="launch-description">Program an Int-Ball2-inspired robot to autonomously travel from its starting station, align its camera with AR markers, inspect checkpoints, and reach the goal. Start the launch sequence, then run the mission script above. The robot moves by itself.</p>
+          <div class="launch-note"><strong>BASED ON THE 7TH KIBO-RPC PROGRAMMING MANUAL</strong><br>This is an independent educational browser trainer. Official programs use the provided ROS environment and Kibo-RPC APIs. Exact checkpoint positions and judging are supplied by the official simulator; the positions and scoring here are illustrative.</div>
           <button class="primary-button launch-button" id="launchButton">▶ &nbsp; Begin launch sequence</button>
           <div class="launch-foot">AUTONOMOUS PROGRAMMING · NO MANUAL STEERING</div>
         </div>
@@ -586,7 +609,7 @@ SCAN</textarea>
         <div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><span class="panel-kicker">Route completion</span><strong id="progressPercent" style="font-family:var(--mono);font-size:12px;color:var(--cyan)">0%</strong></div>
         <div class="mission-progress"><div class="mission-progress-fill" id="missionProgressFill"></div></div>
         <div class="objective-list" id="objectiveList"></div>
-        <div class="help-tip">Your next target is highlighted. Use the program editor to command autonomous movement, alignment, and scanning. The robot performs each step without manual steering.</div>
+        <div class="help-tip">Official scoring checks position accuracy, camera centering on the AR marker, and attitude/roll around the line of sight. The lowest condition level determines the checkpoint level. This trainer estimates those ideas; it does not reproduce the official judge.</div>
       </div>
     </section>
     <section class="panel">
@@ -595,7 +618,8 @@ SCAN</textarea>
         <div class="telemetry-row"><span class="telemetry-key">Position X</span><span class="telemetry-value" id="telemetryX">0.00 m</span></div>
         <div class="telemetry-row"><span class="telemetry-key">Position Y</span><span class="telemetry-value" id="telemetryY">0.00 m</span></div>
         <div class="telemetry-row"><span class="telemetry-key">Heading</span><span class="telemetry-value" id="telemetryHeading">000.0°</span></div>
-        <div class="telemetry-row"><span class="telemetry-key">Angular alignment</span><span class="telemetry-value" id="telemetryAlignment">—</span></div>
+        <div class="telemetry-row"><span class="telemetry-key">Camera centering</span><span class="telemetry-value" id="telemetryAlignment">—</span></div>
+        <div class="telemetry-row"><span class="telemetry-key">Training checkpoint</span><span class="telemetry-value" id="checkpointReadout">—</span></div>
         <div class="telemetry-row"><span class="telemetry-key">Battery</span><span class="battery-wrap"><span class="telemetry-value" id="batteryText">100%</span><span class="battery-track"><span class="battery-fill" id="batteryFill" style="display:block"></span></span></span></div>
         <div class="telemetry-row"><span class="telemetry-key">Scanner</span><span class="telemetry-value" id="scannerStatus">STANDBY</span></div>
       </div>
@@ -690,12 +714,16 @@ const CONFIG = {
   roomPadding: 36
 };
 const TARGETS = [
-  { id: 'dock', name: 'Docking station release', short: 'Dock release', type: 'dock', x: 125, y: 360, heading: 0, hint: 'Release Int-Ball2 from the docking station.', description: 'Confirm release clearance and stabilize the drone before leaving the docking area.', icon: 'D' },
-  { id: 'joint-a', name: 'Structural joint A', short: 'Joint A', type: 'joint', x: 345, y: 170, heading: 1.2, hint: 'Inspect the first structural joint.', description: 'Approach the joint marker, align the nose indicator, and register the AR marker.', icon: 'A' },
-  { id: 'hatch', name: 'Hatch perimeter', short: 'Hatch', type: 'hatch', x: 575, y: 530, heading: 2.5, hint: 'Check the hatch frame for a marker.', description: 'Inspect the hatch perimeter. Stay inside the safe flight boundary.', icon: 'H' },
-  { id: 'rack', name: 'Experiment rack end', short: 'Rack end', type: 'rack', x: 830, y: 180, heading: 5.3, hint: 'Inspect the end of the experiment rack.', description: 'Read the rack-end marker. Keep your speed low to improve recognition accuracy.', icon: 'R' },
-  { id: 'joint-b', name: 'Structural joint B', short: 'Joint B', type: 'joint', x: 1030, y: 470, heading: 3.4, hint: 'Inspect the second structural joint.', description: 'Capture the final structural joint marker and confirm the scan result.', icon: 'B' },
-  { id: 'goal', name: 'Return to goal checkpoint', short: 'Goal', type: 'goal', x: 145, y: 360, heading: 0, hint: 'Return to the docking/goal checkpoint.', description: 'Return to the goal zone to submit the route and finish the mission.', icon: 'G' }
+  { id: 'dock', checkpointId: 'START', markerId: null, name: 'Starting station / release', short: 'Start station', type: 'dock', x: 125, y: 360, heading: 0, hint: 'Begin at the docking station and confirm a stable release.', description: 'Starting location for the practice mission. The official program obtains checkpoint definitions through /mission/get_checkpoints.', icon: 'S' },
+  { id: 'joint-a', checkpointId: 1, markerId: 1, name: 'Checkpoint 1 · Structural joint', short: 'CP 1 · Joint', type: 'joint', x: 345, y: 170, heading: 1.2, hint: 'Approach the joint and center AR marker 1.', description: 'Illustrative checkpoint only. Official checkpoint position and attitude come from the simulator response.', icon: '1' },
+  { id: 'hatch', checkpointId: 2, markerId: 2, name: 'Checkpoint 2 · Hatch area', short: 'CP 2 · Hatch', type: 'hatch', x: 575, y: 530, heading: 2.5, hint: 'Inspect the hatch area and center AR marker 2.', description: 'Illustrative checkpoint only. Stop movement before asking the judge to evaluate a pass.', icon: '2' },
+  { id: 'rack', checkpointId: 3, markerId: 3, name: 'Checkpoint 3 · Experiment rack', short: 'CP 3 · Rack', type: 'rack', x: 830, y: 180, heading: 5.3, hint: 'Inspect the experiment rack and center AR marker 3.', description: 'Illustrative checkpoint only. Marker detection requires the correct 4x4 dictionary, marker ID, marker size, and camera calibration.', icon: '3' },
+  { id: 'joint-b', checkpointId: 4, markerId: 4, name: 'Checkpoint 4 · Structural joint', short: 'CP 4 · Joint', type: 'joint', x: 1030, y: 470, heading: 3.4, hint: 'Inspect the second joint and center AR marker 4.', description: 'Illustrative checkpoint only. The official judge evaluates position, camera centering, and roll/attitude margins.', icon: '4' },
+  { id: 'panel', checkpointId: 5, markerId: 5, name: 'Checkpoint 5 · Utility panel', short: 'CP 5 · Panel', type: 'panel', x: 210, y: 150, heading: 0.8, hint: 'Inspect the utility panel and center AR marker 5.', description: 'Illustrative training location; not an official checkpoint coordinate.', icon: '5' },
+  { id: 'sensor-bay', checkpointId: 6, markerId: 6, name: 'Checkpoint 6 · Sensor bay', short: 'CP 6 · Sensor', type: 'panel', x: 1000, y: 560, heading: 4.8, hint: 'Inspect the sensor bay and center AR marker 6.', description: 'Illustrative training location; not an official checkpoint coordinate.', icon: '6' },
+  { id: 'rack-b', checkpointId: 7, markerId: 7, name: 'Checkpoint 7 · Rack end', short: 'CP 7 · Rack', type: 'rack', x: 700, y: 90, heading: 1.8, hint: 'Inspect the rack end and center AR marker 7.', description: 'Illustrative training location; not an official checkpoint coordinate.', icon: '7' },
+  { id: 'hatch-b', checkpointId: 8, markerId: 8, name: 'Checkpoint 8 · Hatch frame', short: 'CP 8 · Hatch', type: 'hatch', x: 90, y: 560, heading: 5.5, hint: 'Inspect the hatch frame and center AR marker 8.', description: 'Illustrative training location; the actual number and layout depend on the official course.', icon: '8' },
+  { id: 'goal', checkpointId: 12, markerId: 12, name: 'Goal checkpoint · ID 12', short: 'Goal · 12', type: 'goal', x: 145, y: 360, heading: 0, hint: 'Reach the designated goal checkpoint after completing the route.', description: 'The manual example uses goalpoint_id 12. The real goal is read from the official checkpoint response, not assumed from this drawing.', icon: 'G' }
 ];
 const ROOM_FIXTURES = [
   { type: 'rack', x: 245, y: 300, w: 104, h: 170, label: 'EXP RACK 01' },
@@ -817,7 +845,7 @@ function alignmentLabel(value) {
 
 function resizeCanvas() {
   const rect = canvas.getBoundingClientRect();
-  pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
+  pixelRatio = Math.min(window.devicePixelRatio || 1, 1.25);
   canvasWidth = Math.max(320, rect.width);
   canvasHeight = Math.max(300, rect.height);
   canvas.width = Math.floor(canvasWidth * pixelRatio);
@@ -855,7 +883,7 @@ function toWorld(point) {
 
 function initStars() {
   state.stars = [];
-  for (let index = 0; index < 110; index += 1) {
+  for (let index = 0; index < 55; index += 1) {
     state.stars.push({
       x: Math.random(),
       y: Math.random(),
@@ -868,7 +896,7 @@ function initStars() {
 
 function initParticles() {
   state.particles = [];
-  for (let index = 0; index < 38; index += 1) {
+  for (let index = 0; index < 14; index += 1) {
     state.particles.push({
       x: Math.random() * WORLD.width,
       y: Math.random() * WORLD.height,
@@ -959,7 +987,8 @@ function showRouteBriefing() {
     list.append(item);
   });
   fragment.append(list);
-  addTextBlock(fragment, 'Scoring', 'Score is based on successful checkpoint registration, distance from the target, heading alignment, and movement speed during scanning. The displayed score is a training estimate.');
+  addTextBlock(fragment, 'Official scoring concepts', 'The Kibo-RPC manual describes three checkpoint conditions: position distance, camera centering toward the AR marker, and attitude/roll around the line of sight. The lowest of the condition levels becomes the checkpoint level; a condition outside its margin fails the pass. This browser trainer uses illustrative coordinates and an approximate score, not the official judge.');
+  addTextBlock(fragment, 'Official workflow', 'The official program obtains checkpoint definitions, starts the mission, commands movement through the control action, waits for the robot to stabilize, requests checkpoint evaluation, logs the result, and notifies mission completion. This browser app teaches the workflow but does not connect to ROS or the JAXA simulator.');
   showModal('Route briefing', fragment);
 }
 
@@ -979,7 +1008,7 @@ function renderObjectives() {
     name.textContent = target.name;
     const hint = document.createElement('div');
     hint.className = 'objective-hint';
-    hint.textContent = complete ? 'Checkpoint registered' : target.hint;
+    hint.textContent = complete ? 'Registered · training result' : `${target.hint}${target.markerId ? ` (AR marker ${target.markerId})` : ''}`;
     copy.append(name, hint);
     const status = document.createElement('div');
     status.className = 'objective-state';
@@ -1004,6 +1033,8 @@ function updateTelemetry() {
   UI.telemetryY.textContent = `${player.y.toFixed(2)} m`;
   UI.telemetryHeading.textContent = `${(normalizeAngle(player.angle) * 180 / Math.PI).toFixed(1)}°`;
   UI.telemetryAlignment.textContent = target ? `${alignment.toFixed(1)}° · ${alignmentLabel(alignment)}` : 'COMPLETE';
+  const checkpointReadout = document.getElementById('checkpointReadout');
+  if (checkpointReadout) checkpointReadout.textContent = target ? `${target.checkpointId === 'START' ? 'Start station' : 'CP ' + target.checkpointId} · Marker ${target.markerId ?? '—'}` : 'Goal reached';
   UI.batteryText.textContent = `${Math.ceil(state.battery)}%`;
   UI.batteryFill.style.width = `${state.battery}%`;
   UI.batteryFill.style.background = state.battery < 20 ? 'var(--red)' : state.battery < 45 ? 'var(--amber)' : 'var(--green)';
@@ -1037,9 +1068,9 @@ function updateTargetBanner() {
 
 function drawBackground(time) {
   const gradient = ctx.createLinearGradient(0, 0, canvasWidth, canvasHeight);
-  gradient.addColorStop(0, '#91aab7');
-  gradient.addColorStop(.52, '#b4c8d1');
-  gradient.addColorStop(1, '#718b9a');
+  gradient.addColorStop(0, '#071426');
+  gradient.addColorStop(.52, '#12334b');
+  gradient.addColorStop(1, '#06101e');
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, canvasWidth, canvasHeight);
   state.stars.forEach(star => {
@@ -1543,7 +1574,11 @@ function drawRoomBorder() {
   ctx.restore();
 }
 
-function renderRouteMap() {
+let lastRouteRender = 0;
+function renderRouteMap(force = false) {
+  const now = performance.now();
+  if (!force && now - lastRouteRender < 180) return;
+  lastRouteRender = now;
   const width = routeCanvas.width;
   const height = routeCanvas.height;
   routeCtx.clearRect(0, 0, width, height);
@@ -1616,7 +1651,7 @@ function render(time = performance.now()) {
   ctx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
   drawBackground(time);
   drawRoom(time);
-  renderRouteMap();
+  if (time - lastRouteRender > 180) renderRouteMap();
 }
 
 function canMoveTo(x, y) {
@@ -2172,12 +2207,16 @@ function tick(delta) {
   }
 }
 
+let lastRenderTime = 0;
 function frame(time) {
   if (!state.lastFrame) state.lastFrame = time;
-  const delta = Math.min(.04, Math.max(0, (time - state.lastFrame) / 1000));
+  const delta = Math.min(.033, Math.max(0, (time - state.lastFrame) / 1000));
   state.lastFrame = time;
   tick(delta);
-  render(time);
+  if (time - lastRenderTime >= 30) {
+    lastRenderTime = time;
+    render(time);
+  }
   requestAnimationFrame(frame);
 }
 
@@ -2249,7 +2288,7 @@ function bindEvents() {
   UI.launchButton.addEventListener('click', beginLaunch);
   document.getElementById('runProgramButton').addEventListener('click', runAutonomousProgram);
   document.getElementById('stopProgramButton').addEventListener('click', stopAutonomousProgram);
-  document.getElementById('sampleProgramButton').addEventListener('click', () => { document.getElementById('programEditor').value = 'MOVE_TO dock\nALIGN\nSCAN\nMOVE_TO joint-a\nALIGN\nSCAN\nMOVE_TO hatch\nALIGN\nSCAN\nMOVE_TO rack\nALIGN\nSCAN\nMOVE_TO joint-b\nALIGN\nSCAN\nMOVE_TO goal\nALIGN\nSCAN'; setProgramStatus('Sample route restored. Run it after launch.', 'PROGRAM READY'); });
+  document.getElementById('sampleProgramButton').addEventListener('click', () => { document.getElementById('programEditor').value = 'MOVE_TO dock\nALIGN\nWAIT 1\nSCAN\nMOVE_TO joint-a\nALIGN\nWAIT 1\nSCAN\nMOVE_TO hatch\nALIGN\nWAIT 1\nSCAN\nMOVE_TO rack\nALIGN\nWAIT 1\nSCAN\nMOVE_TO joint-b\nALIGN\nWAIT 1\nSCAN\nMOVE_TO panel\nALIGN\nWAIT 1\nSCAN\nMOVE_TO sensor-bay\nALIGN\nWAIT 1\nSCAN\nMOVE_TO rack-b\nALIGN\nWAIT 1\nSCAN\nMOVE_TO hatch-b\nALIGN\nWAIT 1\nSCAN\nMOVE_TO goal\nALIGN\nWAIT 1\nSCAN'; setProgramStatus('Sample route restored. This is a training script; run it after launch.', 'PROGRAM READY'); });
   UI.targetButton.addEventListener('click', scanTarget);
   document.getElementById('helpButton').addEventListener('click', showHelp);
   document.getElementById('routeButton').addEventListener('click', showRouteBriefing);
